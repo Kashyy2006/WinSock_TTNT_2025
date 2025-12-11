@@ -8,10 +8,6 @@
 #include <sstream>
 #include <algorithm>
 
-// Liên kết thư viện Winsock. Khi dùng g++ trên MinGW, cần thêm cờ -lws2_32 vào lệnh biên dịch
-#pragma comment(lib, "ws2_32.lib") 
-
-// Định nghĩa các ứng dụng có thể quản lý
 std::map<std::string, std::string> APPS = {
     {"notepad", "notepad.exe"},
     {"mspaint", "mspaint.exe"},
@@ -21,13 +17,6 @@ std::map<std::string, std::string> APPS = {
 const int PORT = 8080;
 const int BUFFER_SIZE = 4096;
 
-// --- Hàm tiện ích Windows API ---
-
-/**
- * @brief Kiểm tra xem một ứng dụng (theo tên file .exe) có đang chạy hay không.
- * @param exe_name Tên file thực thi (ví dụ: "notepad.exe").
- * @return true nếu đang chạy, false nếu không.
- */
 bool is_running(const std::string& exe_name) {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) {
@@ -39,10 +28,8 @@ bool is_running(const std::string& exe_name) {
 
     if (Process32First(hSnapshot, &pe)) {
         do {
-            // Chuyển đổi char[MAX_PATH] sang std::string
             std::string current_exe(pe.szExeFile);
             
-            // Chuyển sang chữ thường để so sánh không phân biệt chữ hoa/thường
             std::transform(current_exe.begin(), current_exe.end(), current_exe.begin(), ::tolower);
             std::string target_exe = exe_name;
             std::transform(target_exe.begin(), target_exe.end(), target_exe.begin(), ::tolower);
@@ -58,11 +45,6 @@ bool is_running(const std::string& exe_name) {
     return false;
 }
 
-/**
- * @brief Dừng tất cả các tiến trình của một ứng dụng (theo tên file .exe).
- * @param exe_name Tên file thực thi.
- * @return Số lượng tiến trình đã bị dừng.
- */
 int stop_app_by_exe(const std::string& exe_name) {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) {
@@ -96,9 +78,6 @@ int stop_app_by_exe(const std::string& exe_name) {
 }
 
 
-// --- Hàm HTTP Response ---
-
-// Tạo phản hồi HTTP 200 OK
 std::string html_page(const std::string& body) {
     std::string response = "HTTP/1.1 200 OK\r\n";
     response += "Content-Type: text/html\r\n";
@@ -108,7 +87,6 @@ std::string html_page(const std::string& body) {
     return response;
 }
 
-// Tạo phản hồi HTTP 302 Redirect
 std::string redirect(const std::string& url = "/") {
     std::string response = "HTTP/1.1 302 Found\r\n";
     response += "Location: " + url + "\r\n";
@@ -117,7 +95,6 @@ std::string redirect(const std::string& url = "/") {
     return response;
 }
 
-// --- Hàm xử lý logic ---
 
 std::string list_apps() {
     std::string rows;
@@ -141,8 +118,6 @@ void start_app(const std::string& app_name) {
     if (APPS.count(app_name)) {
         std::string exe = APPS[app_name];
         
-        // Sử dụng ShellExecuteA để chạy ứng dụng (giống subprocess.Popen)
-        // SW_SHOWNORMAL để hiển thị cửa sổ
         ShellExecuteA(NULL, "open", exe.c_str(), NULL, NULL, SW_SHOWNORMAL);
     }
 }
@@ -154,9 +129,6 @@ void stop_app(const std::string& app_name) {
     }
 }
 
-// --- Hàm phân tích cú pháp (giản lược) ---
-
-// Chỉ phân tích cú pháp đường dẫn và query string
 std::map<std::string, std::string> parse_request_path(const std::string& request, std::string& route) {
     std::map<std::string, std::string> query;
     size_t start = request.find(' ');
@@ -170,12 +142,10 @@ std::map<std::string, std::string> parse_request_path(const std::string& request
             route = full_path.substr(0, query_pos);
             std::string query_str = full_path.substr(query_pos + 1);
             
-            // Phân tích query string (rất đơn giản, chỉ hỗ trợ "app=tên")
             size_t eq_pos = query_str.find('=');
             if (eq_pos != std::string::npos) {
                 std::string key = query_str.substr(0, eq_pos);
                 std::string val = query_str.substr(eq_pos + 1);
-                // Giả định giá trị đã được giải mã URL (không cần url_decode phức tạp ở đây)
                 query[key] = val;
             }
 
@@ -208,7 +178,7 @@ int main() {
     sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Bind to all interfaces
+    server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
         std::cerr << "Bind failed with error: " << WSAGetLastError() << "\n";
@@ -247,7 +217,6 @@ int main() {
             std::map<std::string, std::string> query = parse_request_path(request, route);
             std::string response;
 
-            // Xử lý Route
             if (route == "/") {
                 response = html_page("<h1>WinSock C++ App Controller</h1>"
                                      "<ul>"
@@ -267,15 +236,12 @@ int main() {
                 response = html_page("<h1>404 Not Found</h1>");
             }
 
-            // Gửi phản hồi
             send(client_socket, response.c_str(), response.length(), 0);
         }
 
-        // Đóng kết nối với client
         closesocket(client_socket);
     }
 
-    // Dọn dẹp (thực tế không chạy được do vòng lặp vô hạn)
     closesocket(server_fd);
     WSACleanup();
     return 0;

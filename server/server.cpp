@@ -10,6 +10,9 @@
 // - GET /processes/actions/stop?pid=1234  -> stop process by PID
 // - GET /processes/actions/stop?name=chrome.exe -> stop processes by name
 
+// - GET /keylogger            -> key capture page
+// - GET /keylogger/send?key=K -> receive key from client
+
 // - GET /screenshot      -> take screenshot, returns filename
 // - GET /webcam_rec      -> record 10 seconds from default webcam, returns filename
 
@@ -286,83 +289,48 @@ std::string stop_process_by_name(const std::string& name) {
     return html_page("<h1>Terminated " + std::to_string(count) + " processes named " + name + "</h1>");
 }
 
-// ====================== KEYLOGGER ======================
-HHOOK g_keyboardHook = NULL;
-DWORD g_threadId = 0;
+// ====================== Bat phim Nhan ======================
+std::string KEY_LOG = "";
 
-// 1. Hàm Keylogger Hook (Thay thế cho KeyLogger.InterceptKeys.startKLog)
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
-
-        KBDLLHOOKSTRUCT *p = (KBDLLHOOKSTRUCT *)lParam;
-    }
-    return CallNextHookEx(g_keyboardHook, nCode, wParam, lParam);
-}
-
-// 2. Hàm chạy luồng (thay thế cho việc khởi tạo tklog)
-void KeyLoggerThreadFunc() {
-    g_threadId = GetCurrentThreadId();
-
-
-    MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
-}
-
-// 3. Hàm Móc nối (Hook) - Tương đương với "HOOK"
-bool hookKey() {
-    if (g_keyboardHook == NULL) {
-        g_keyboardHook = SetWindowsHookEx(
-            WH_KEYBOARD_LL,
-            KeyboardProc,
-            GetModuleHandle(NULL),
-            0 
-        );
-        return g_keyboardHook != NULL;
-    }
-    return true;
-}
-
-// 4. Hàm Gỡ móc nối (Unhook) - Tương đương với "UNHOOK"
-void unhook() {
-    if (g_keyboardHook != NULL) {
-        UnhookWindowsHookEx(g_keyboardHook);
-        g_keyboardHook = NULL;
-    }
-}
-
-// 5. Hàm điều khiển chính (Tương đương với keylog())
 std::string keylog_control() {
-    std::thread keyloggerThread(KeyLoggerThreadFunc);
-    keyloggerThread.detach();
-    std::string s;
-    if (hookKey()) {
-        std::cout << "Keylogger HOOKED.\n";
+    std::string body = R"(
+        <h1>Key Logger (Client-side)</h1>
+        <p>Typing anything and data will be sent to server!</p>
+
+        <script>
+            document.addEventListener("keydown", function(e) {
+                fetch("/keylogger/send?key=" + encodeURIComponent(e.key));
+            });
+        </script>
+
+        <p>Keys are being sent to server...</p>
+    )";
+
+    return html_page(body);
+}
+
+std::string keylog_receive(const std::map<std::string, std::string>& query) {
+    if (!query.count("key")) {
+        return html_page("<h1>No key</h1>");
     }
 
-    while (true) {
-        std::cout << "\nEnter command (PRINT/UNHOOK/HOOK/QUIT): ";
-        std::cin >> s;
+    std::string key = query.at("key");
 
-        if (s == "PRINT") {
-            std::cout << "Printing captured keys...\n";
-        } else if (s == "HOOK") {
-            if (hookKey()) {
-                std::cout << "Keylogger HOOKED successfully.\n";
-            } else {
-                std::cout << "Error HOOKING.\n";
-            }
-        } else if (s == "UNHOOK") {
-            unhook();
-            std::cout << "Keylogger UNHOOKED.\n";
-        } else if (s == "QUIT") {
-            unhook();
-            PostThreadMessage(g_threadId, WM_QUIT, 0, 0);
-            return "aaaaa";
-        }
+    // Xử lý các phím đặc biệt cho dễ đọc
+    if (key == "Enter") KEY_LOG += "\n";
+    else if (key == "Space") KEY_LOG += " ";
+    else if (key == "Backspace") {
+        if (!KEY_LOG.empty()) KEY_LOG.pop_back();
     }
+    else if (key.length() == 1) {
+        KEY_LOG += key;
+    } else {
+        KEY_LOG += "[" + key + "]";
+    }
+
+    std::cout << "[KEY_LOG] " << KEY_LOG << std::endl;
+
+    return html_page("<h1>OK</h1>");
 }
 
 // ====================== SCREENSHOT ======================
@@ -452,10 +420,12 @@ int main() {
                 std::string app_name = query.count("app") ? query["app"] : "";
                 stop_app(app_name);
                 response = redirect("/apps");
-            }else if (route == "/processes") {
+            } else if (route == "/processes") {
                 response = list_processes();
-            }else if (route == "/keylogger") {
+            } else if (route == "/keylogger") {
                 response = keylog_control();
+            } else if (route == "/keylogger/send") {
+                response = keylog_receive(query);
             } else {
                 response = html_page("<h1>404 Not Found</h1>");
             }

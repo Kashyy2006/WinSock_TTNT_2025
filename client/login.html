@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cấu hình Kết nối - Remote Control</title>
+    <link rel="stylesheet" href="login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h2>Thiết lập Kết nối</h2>
+        <form id="connection-form">
+            <div class="input-group">
+                <label for="ip-address">Địa chỉ IP Server</label>
+                <input type="text" id="ip-address" placeholder="VD: 192.168.1.10" required>
+            </div>
+            <div class="input-group">
+                <label for="port">Cổng (Port)</label>
+                <input type="number" id="port" placeholder="VD: 8080" required min="1" max="65535">
+            </div>
+            <button type="submit" class="connect-btn">Kết nối</button>
+        </form>
+    </div>
+    <script src="login.js"></script>
+</body>
+</html>

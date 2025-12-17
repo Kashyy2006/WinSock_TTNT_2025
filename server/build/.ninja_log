@@ -1,0 +1,9 @@
+# ninja log v7
+141	3215	7876678992549512	CMakeFiles/server.dir/src/http_utils.cpp.obj	dbf6684568c3f4ef
+104	3286	7876678992148547	CMakeFiles/server.dir/src/config.cpp.obj	51ebdc6acb40b82
+163	3553	7876678994752004	CMakeFiles/server.dir/src/keylogger.cpp.obj	417c5d73f721cb02
+3220	5979	7876679023313644	CMakeFiles/server.dir/src/router.cpp.obj	eed0059b48790bf4
+69	7998	7876678991805300	CMakeFiles/server.dir/src/server.cpp.obj	742334afbfa1d97b
+120	8066	7876678992326869	CMakeFiles/server.dir/src/apps.cpp.obj	4545270461307197
+395	8227	7876678995069046	CMakeFiles/server.dir/src/processes.cpp.obj	6e82e2c4c6409395
+8228	9139	7876679073399676	server.exe	ae12ae685760bf38

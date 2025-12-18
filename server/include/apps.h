@@ -1,9 +1,9 @@
 #pragma once
 #include <string>
 #include <map>
+#include "config.h"
+#include "http_utils.h"
 
-extern std::map<std::string, std::string> APPS;
-
+bool is_running(const std::string& exe_name);
+void start_app_sys(const std::string& exe_path);
 std::string list_apps();
-void start_app(const std::string& app_name);
-void stop_app(const std::string& app_name);

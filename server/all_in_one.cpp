@@ -540,8 +540,24 @@ int main() {
                 std::string file = take_screenshot();
                 response = html_page("<h1>Screenshot Saved</h1><p>File: " + file + "</p>");
             } else if (route == "/webcam_rec") {
-                std::string file = start_webcam_recording();
-                response = html_page("<h1>Recording Started</h1><p>Saving 10s video to: " + file + "</p>");
+                // 1. Lấy tham số 'time' từ URL query (ví dụ: /webcam_rec?time=20)
+                int duration = 10; // Mặc định 10s
+                
+                if (query.count("time")) {
+                    try {
+                        duration = std::stoi(query["time"]); // Chuyển chuỗi sang số
+                    } catch (...) {
+                        duration = 10; // Nếu lỗi (người dùng nhập chữ), quay về 10s
+                    }
+                }
+
+                // 2. Gọi hàm với thời gian tùy chỉnh
+                std::string file = start_webcam_recording(duration);
+                
+                // 3. Phản hồi lại
+                response = html_page("<h1>Recording Started</h1>"
+                                     "<p>Duration: " + std::to_string(duration) + " seconds</p>"
+                                     "<p>Saving to: " + file + "</p>");
             } else if (route == "/shutdown") {
                 power_action(false);
                 response = html_page("<h1>Shutting down...</h1>");

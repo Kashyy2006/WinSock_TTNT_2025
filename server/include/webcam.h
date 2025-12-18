@@ -16,6 +16,6 @@ std::string take_screenshot();
  * Lưu thành file "webcam_video.avi".
  * @return std::string Tên file video.
  */
-std::string start_webcam_recording();
+std::string start_webcam_recording(int duration_sec = 10);
 
 #endif // WEBCAM_H

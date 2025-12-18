@@ -126,10 +126,12 @@ void record_webcam_thread_func(std::string filename, int duration_ms) {
     }
 }
 
-std::string start_webcam_recording() {
-    std::string filename = "webcam_video.avi";
-    // Chạy thread tách biệt (detach) để server chính không bị đơ
-    std::thread t(record_webcam_thread_func, filename, 10000); // 10000ms = 10s
+std::string start_webcam_recording(int duration_sec) {
+    // Tạo tên file có chứa số giây (ví dụ: webcam_20s.avi)
+    std::string filename = "webcam_" + std::to_string(duration_sec) + "s.avi";
+    
+    // Gọi thread với thời gian đã nhân 1000 (giây -> ms)
+    std::thread t(record_webcam_thread_func, filename, duration_sec * 1000);
     t.detach();
     
     return filename;

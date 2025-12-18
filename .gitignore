@@ -1,0 +1,8 @@
+server/build/
+build/
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+.vscode/

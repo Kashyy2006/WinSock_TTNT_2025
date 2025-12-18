@@ -1,3 +1,0 @@
-C:/Users/Admin/OneDrive/Desktop/WinSock_TTNT_2025/server/build/CMakeFiles/server.dir
-C:/Users/Admin/OneDrive/Desktop/WinSock_TTNT_2025/server/build/CMakeFiles/edit_cache.dir
-C:/Users/Admin/OneDrive/Desktop/WinSock_TTNT_2025/server/build/CMakeFiles/rebuild_cache.dir

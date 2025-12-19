@@ -1,0 +1,218 @@
+let SERVER_IP = ""; 
+const PORT = 6969;
+
+// --- 1. CÁC HÀM UI (Sửa lỗi ReferenceError) ---
+
+// Hàm hiển thị thông báo (Toast)
+function showToast(msg, type = "success") {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-check'}"></i> ${msg}`;
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Hàm bật giao diện "Giả" Camera (UI Only)
+function startOnWebcam() {
+    const container = document.getElementById('onWebcamContainer');
+    if(container) {
+        container.style.display = 'flex';
+        container.innerHTML = '<span style="color: #4ade80;"><i class="fa-solid fa-circle-dot fa-beat"></i> Camera Active (Ready to Record)</span>';
+    }
+    showToast("Đã bật chế độ Camera", "success");
+}
+
+// Hàm tắt giao diện Camera
+function stopOnWebcam() {
+    const container = document.getElementById('onWebcamContainer');
+    if(container) {
+        container.innerHTML = '<span style="color: #64748b;">Màn hình Camera (Đã tắt)</span>';
+    }
+    showToast("Đã tắt Camera", "error");
+}
+
+// Hàm chuyển Tab
+function switchTab(tabId, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+}
+
+
+// --- 2. LOGIC MẠNG (Kết nối C++) ---
+
+async function sendRequest(route) {
+    // Kiểm tra kết nối
+    if (!SERVER_IP) {
+        showToast("Bạn chưa kết nối tới Server!", "error");
+        return null;
+    }
+    // Kiểm tra route có hợp lệ không (Sửa lỗi 404)
+    if (!route) {
+        console.error("Lỗi: Route bị rỗng (Undefined command)");
+        return null;
+    }
+
+    try {
+        const url = `http://${SERVER_IP}:${PORT}${route}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Tăng timeout lên 10s cho video
+
+        const response = await fetch(url, { 
+            method: 'GET',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`Server Error: ${response.status}`);
+        }
+        return await response.text();
+    } catch (e) {
+        console.error(e);
+        showToast(`Lỗi kết nối: ${e.message}`, "error");
+        return null;
+    }
+}
+
+// --- 3. XỬ LÝ KẾT NỐI (Connect/Disconnect) ---
+document.getElementById('btnConnect').addEventListener('click', async () => {
+    const ipInput = document.getElementById('ipInput').value.trim();
+    if (!ipInput) return showToast("Vui lòng nhập IP!", "error");
+
+    SERVER_IP = ipInput; 
+    const res = await sendRequest('/ping');
+    
+    if (res) {
+        showToast("Kết nối thành công!");
+        document.getElementById('connectStatus').innerHTML = `Connected: <span style="color:var(--success)">${SERVER_IP}</span>`;
+        document.getElementById('connectionPanel').style.display = 'none';
+        document.getElementById('disconnectPanel').style.display = 'flex';
+    } else {
+        SERVER_IP = ""; 
+    }
+});
+
+document.getElementById('btnDisconnect').addEventListener('click', () => {
+    SERVER_IP = "";
+    document.getElementById('connectStatus').innerHTML = "Status: Disconnected";
+    document.getElementById('connectionPanel').style.display = 'flex';
+    document.getElementById('disconnectPanel').style.display = 'none';
+    showToast("Đã ngắt kết nối.");
+});
+
+
+// --- 4. GỬI LỆNH (Main Logic) ---
+
+async function sendCommand(cmd) {
+    let route = "";
+    
+    // --- Xử lý các lệnh cơ bản ---
+    if (cmd === 'listApp') route = '/apps';
+    else if (cmd === 'listProcess') route = '/processes';
+    else if (cmd === 'shutdown') route = '/shutdown';
+    else if (cmd === 'restart') route = '/restart';
+    else if (cmd === 'getKeylog') route = '/keylogger/get';
+    
+    else if (cmd === 'startApp') {
+        const name = document.getElementById('appName').value;
+        if (!name) return showToast("Nhập tên App!", "error");
+        route = `/apps/start?name=${encodeURIComponent(name)}`;
+    }
+    else if (cmd === 'stopApp') {
+        const name = document.getElementById('appName').value;
+        if (!name) return showToast("Nhập tên App!", "error");
+        route = `/apps/stop?name=${encodeURIComponent(name)}`;
+    }
+    else if (cmd === 'stopProcess') {
+        const pid = document.getElementById('processName').value;
+        if (!pid) return showToast("Nhập PID hoặc tên!", "error");
+        route = `/processes/stop?name=${encodeURIComponent(pid)}`;
+    }
+
+    // --- XỬ LÝ SCREENSHOT (Sửa để hiển thị ảnh) ---
+    else if (cmd === 'screenshot') {
+        showToast("📸 Đang chụp màn hình...", "info");
+        const path = await sendRequest('/screenshot'); // Server trả về "/screenshot.bmp"
+        
+        if (path) {
+            const timestamp = new Date().getTime();
+            const imgUrl = `http://${SERVER_IP}:${PORT}${path.trim()}?t=${timestamp}`;
+            
+            document.getElementById('mediaResult').innerHTML = `
+                <div style="margin-top:10px; text-align: center;">
+                    <img src="${imgUrl}" style="max-width: 100%; border-radius: 8px; border: 1px solid #475569; box-shadow: 0 4px 6px rgba(0,0,0,0.3);" />
+                    <br>
+                    <a href="${imgUrl}" download="screenshot_${timestamp}.bmp" class="action-btn" style="margin-top: 5px; display: inline-block; background: #334155;">
+                        <i class="fa-solid fa-download"></i> Tải ảnh về
+                    </a>
+                </div>
+            `;
+            showToast("Đã chụp xong!");
+        }
+        return; // Kết thúc hàm, không chạy phần default ở dưới
+    }
+
+    // --- XỬ LÝ WEBCAM (Sửa lỗi 404) ---
+    // HTML gọi là 'recordVideo', nên ta bắt case này
+    else if (cmd === 'recordVideo') { 
+        const secInput = document.getElementById('recSeconds');
+        const sec = secInput ? secInput.value : 5;
+        
+        showToast(`🎥 Đang quay ${sec}s...`, "info");
+        document.getElementById('recordResult').innerHTML = `<span style="color:var(--warning)">⏳ Đang quay video... vui lòng chờ ${sec}s</span>`;
+
+        // Gọi lệnh xuống C++ (Dạng GET cho đơn giản)
+        const path = await sendRequest(`/webcam?seconds=${sec}`);
+        
+        if(path && !path.includes("Error")) {
+            // Chờ thêm 1 chút để server chắc chắn ghi xong file
+            setTimeout(() => {
+                const timestamp = new Date().getTime();
+                const fullUrl = `http://${SERVER_IP}:${PORT}${path.trim()}?t=${timestamp}`;
+                const downloadName = `Evidence_${timestamp}.avi`;
+    
+                document.getElementById('recordResult').innerHTML = `
+                    <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">
+                        <p style="color: #4ade80; margin-bottom: 10px;">✅ Quay thành công!</p>
+                        <a href="${fullUrl}" download="${downloadName}" class="action-btn btn-primary" style="text-decoration: none; display: inline-block;">
+                            <i class="fa-solid fa-download"></i> Tải Video (.avi)
+                        </a>
+                    </div>`;
+                showToast("Video đã sẵn sàng!", "success");
+            }, (sec * 1000) + 500); 
+        } else {
+            document.getElementById('recordResult').innerHTML = `<span style="color:var(--danger)">Lỗi khi quay video.</span>`;
+        }
+        return; 
+    }
+
+    // --- Gửi request cho các lệnh thường (listApp, listProcess...) ---
+    if (route) {
+        const result = await sendRequest(route);
+        if (result) {
+            if (cmd === 'listApp') {
+                document.getElementById('appList').innerHTML = result;
+                showToast("Đã cập nhật danh sách App.");
+            } 
+            else if (cmd === 'listProcess') {
+                document.getElementById('processList').innerHTML = result;
+                showToast("Đã cập nhật danh sách Process.");
+            }
+            else if (cmd === 'getKeylog') {
+                document.getElementById('keylogResult').innerText = result || "Chưa có dữ liệu...";
+            }
+            else {
+                // Các lệnh start/stop chỉ cần hiện thông báo
+                showToast(result);
+            }
+        }
+    }
+}

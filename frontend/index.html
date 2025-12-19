@@ -188,19 +188,46 @@
 
             <div id="monitor" class="page">
                 <h2>Monitor View</h2>
-                <div class="card">
+                <!-- <div class="card">
+                <div class="control-row">
+                    <button onclick="sendCommand('screenshot')" class="action-btn" style="background: #e67e22;">
+                        <i class="fa-solid fa-camera"></i> Screenshot
+                    </button>
+                    <div id="webcamPanel" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                        <input type="number" id="timeInput" placeholder="Seconds" value="10" 
+                        style="width: 60px; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; text-align: center;">
+                            
+                    <button id="btnTime" onclick="startWebcamCustom()" class="action-btn" style="background: #9b59b6; cursor: pointer;">
+                        <i class="fa-solid fa-video"></i> Record Webcam
+                    </button>
+                </div> -->
+
+                    <div class="card">
+                    <h3>Monitor</h3>
                     <div class="control-row">
                         <button onclick="sendCommand('screenshot')" class="action-btn" style="background: #e67e22;">
                             <i class="fa-solid fa-camera"></i> Screenshot
                         </button>
-                        <div id="webcamPanel" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                            <input type="number" id="timeInput" placeholder="Seconds" value="10" 
-                                style="width: 60px; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; text-align: center;">
-                            
-                            <button id="btnTime" onclick="startWebcamCustom()" class="action-btn" style="background: #9b59b6; cursor: pointer;">
-                                <i class="fa-solid fa-video"></i> Record Webcam
-                            </button>
-                        </div>
+                        <button onclick="startOnWebcam()" class="action-btn btn-green">
+                            <i class="fa-solid fa-eye"></i> Bật Camera
+                        </button>
+                        <button onclick="stopOnWebcam()" class="action-btn btn-danger">
+                            <i class="fa-solid fa-eye-slash"></i> Tắt Camera
+                        </button>
+
+                        <input id="recSeconds" type="number" value="5" placeholder="Số giây quay">
+                        <button onclick="sendCommand('recordVideo')" class="action-btn btn-primary">
+                            <i class="fa-solid fa-video"></i> Quay & Lưu
+                        </button>
+                    </div>
+                    <div id="onWebcamContainer" style="background: black; min-height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <span style="color: #64748b;">Màn hình Camera</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div id="recordResult" class="terminal" style="min-height: 50px;">Kết quả quay sẽ hiện ở đây...</div>
+                </div>
 
 <div id="webcamResult" style="color: cyan; font-size: 13px; margin-top: 5px;"></div>
                         
@@ -244,50 +271,98 @@
                 document.getElementById("mediaResult").innerText = data;
             });
     }
+    </script>
 
-    // Hàm gọi API Webcam
-    function triggerWebcam(timeInput) {
-        document.getElementById("mediaResult").innerText = "Starting webcam...";
-        fetch('/webcam?duration={timeInput}') // Quay 10 giây
-            .then(res => res.text())
-            .then(data => {
-                document.getElementById("mediaResult").innerText = data;
+    <script>
+    // 1. Cấu hình IP Server (Lấy IP hiện tại của trình duyệt hoặc gán cứng IP máy server)
+    const IP = window.location.hostname || "127.0.0.1"; 
+    const PORT = 6969;
+
+    // Hàm hỗ trợ hiển thị thông báo (Giả lập Toast nếu bạn chưa có thư viện Toast)
+    function showToast(message, type) {
+        console.log(`[${type}] ${message}`);
+        // Nếu bạn có thư viện toast thì dùng, không thì dùng alert tạm
+        // alert(message); 
+    }
+
+    // Hàm gửi dữ liệu xuống Server (Backend C++)
+    async function postControl(data) {
+        try {
+            // Gửi request POST đến đường dẫn /webcam
+            // Server C++ sẽ đọc body để tìm "seconds"
+            const response = await fetch(`http://${IP}:${PORT}/webcam`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data) 
             });
+            return await response.text();
+        } catch (error) {
+            console.error("Lỗi kết nối:", error);
+            return "Error: Không kết nối được Server";
+        }
     }
 
-        //////////////////////////
-    function startWebcamCustom() {
-    // 1. Lấy giá trị từ ô input
-    const inputElement = document.getElementById('timeInput');
-    const resultDiv = document.getElementById('webcamResult');
-    
-    let duration = parseInt(inputElement.value);
 
-    // 2. Kiểm tra dữ liệu nhập (Validation)
-    if (isNaN(duration) || duration <= 0) {
-        alert("Vui lòng nhập số giây hợp lệ (> 0)!");
-        inputElement.value = 10; // Reset về 10
-        return;
+    // 1. Hàm bật giao diện Camera (startOnWebcam)
+    function startOnWebcam() {
+        const container = document.getElementById('onWebcamContainer');
+        if(container) {
+            container.style.display = 'flex';
+            container.innerHTML = '<span style="color: #4ade80;">Camera Active (Ready to Record)</span>';
+        }
+        showToast("Đã bật chế độ Camera", "success");
     }
 
-    // 3. Thông báo đang gửi lệnh
-    if (resultDiv) resultDiv.innerText = `Sending command (Duration: ${duration}s)...`;
-
-    // 4. Gửi request kèm tham số ?duration=...
-    // Ví dụ: /webcam?duration=20
-    fetch(`/webcam?duration=${duration}`)
-        .then(response => response.text())
-        .then(data => {
-            console.log("Server response:", data);
-            // Hiển thị phản hồi từ Server lên màn hình
-            if (resultDiv) resultDiv.innerText = data;
-        })
-        .catch(err => {
-            console.error("Error:", err);
-            if (resultDiv) resultDiv.innerText = "Error connecting to server!";
-        });
+    // 2. Hàm tắt giao diện Camera (stopOnWebcam)
+    function stopOnWebcam() {
+        const container = document.getElementById('onWebcamContainer');
+        if(container) {
+            container.innerHTML = '<span style="color: #64748b;">Màn hình Camera (Đã tắt)</span>';
+        }
+        showToast("Đã tắt Camera", "error");
     }
-        ////////////////////////////////////////////
+
+    // 3. Hàm gửi lệnh quay (sendCommand) - Quan trọng nhất
+    async function sendCommand(cmd) {
+        if(cmd === 'recordVideo') {
+            const secInput = document.getElementById('recSeconds');
+            const sec = secInput ? secInput.value : 5; // Mặc định 5s nếu không tìm thấy input
+            
+            showToast(`🎥 Đang quay ${sec}s... (Vui lòng chờ)`, "info");
+            
+            // --- Gửi lệnh xuống C++ ---
+            // Server C++ chờ lệnh này, quay video, rồi trả về đường dẫn file
+            const path = await postControl({ command: 'recordVideo', seconds: sec });
+            
+            // Xử lý kết quả trả về
+            const resultDiv = document.getElementById('recordResult');
+            
+            if(path.includes("Error") || path.includes("Loi") || path.includes("404")) {
+                showToast("Lỗi khi quay video", "error");
+                if(resultDiv) resultDiv.innerHTML = `<div style="color:red">Lỗi: ${path}</div>`;
+            } else {
+                // Tạo URL tải về (Thêm timestamp để tránh cache)
+                const timestamp = new Date().getTime();
+                const fullUrl = `http://${IP}:${PORT}${path}`;
+                const downloadName = `Evidence_${timestamp}.avi`;
+
+                // Hiển thị nút tải về (Vì trình duyệt không xem được AVI trực tiếp)
+                if(resultDiv) {
+                    resultDiv.innerHTML = `
+                    <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">
+                        <p style="color: #cbd5e1; margin-bottom: 5px;">✅ Quay thành công!</p>
+                        <a href="${fullUrl}" download="${downloadName}" 
+                           style="background-color: #e25ab2; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                           <i class="fa-solid fa-download"></i> Tải Video Về (.avi)
+                        </a>
+                    </div>`;
+                }
+                
+                showToast("Đã xong! Video đã sẵn sàng.", "success");
+            }
+        }
+    }
+</script>
     
     </script>
 </body>

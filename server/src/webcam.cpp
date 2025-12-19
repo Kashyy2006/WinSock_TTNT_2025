@@ -1,7 +1,10 @@
-#include "webcam.h" // Hoặc #include "../include/webcam.h" tùy cấu trúc folder
+#include <winsock2.h>
 #include <windows.h>
-#include <vfw.h>
+#include <vfw.h> 
+#include <iostream>
+#include <string>
 #include <thread>
+#include <vector>
 #include <iostream>
 
 // ====================== LOGIC SCREENSHOT ======================
@@ -132,9 +135,9 @@ void record_webcam_thread_func(std::string filename, int duration_ms) {
 }
 
 std::string start_webcam_recording(int duration_sec) {
-    std::string filename = "webcam_" + std::to_string(duration_sec) + "s.avi";
-    // Chạy thread riêng để không treo server
-    std::thread t(record_webcam_thread_func, filename, duration_sec * 1000);
-    t.detach(); 
-    return filename;
+    std::string filename = "evidence_" + std::to_string(duration_sec) + "s.avi";
+
+    record_webcam_thread_func(filename, duration_sec * 1000);
+
+    return "/" + filename;
 }

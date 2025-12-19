@@ -4,6 +4,8 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <tlhelp32.h>
+#include <fstream>
+#include <vector>
 #include <string>
 #include <map>
 #include <sstream>
@@ -38,6 +40,46 @@ std::string http_response(const std::string& body, const std::string& status = "
     return response;
 }
 
+
+
+////////////////
+
+
+void serve_file(SOCKET client_socket, const std::string& filepath) {
+    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        std::string msg = http_response("File not found", "404 Not Found");
+        send(client_socket, msg.c_str(), msg.length(), 0);
+        return;
+    }
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<char> buffer(size);
+    if (file.read(buffer.data(), size)) {
+        // Xác định loại file (MIME type)
+        std::string content_type = "application/octet-stream";
+        if (filepath.find(".bmp") != std::string::npos) content_type = "image/bmp";
+        else if (filepath.find(".avi") != std::string::npos) content_type = "video/x-msvideo";
+
+        // Tạo Header HTTP chuẩn
+        std::string header = "HTTP/1.1 200 OK\r\n";
+        header += "Content-Type: " + content_type + "\r\n";
+        header += "Content-Length: " + std::to_string(size) + "\r\n";
+        header += "Access-Control-Allow-Origin: *\r\n";
+        header += "Connection: close\r\n\r\n";
+
+        // Gửi Header trước
+        send(client_socket, header.c_str(), header.length(), 0);
+        
+        // Gửi dữ liệu file (Binary)
+        send(client_socket, buffer.data(), size, 0);
+    }
+    file.close();
+}
+
+/////////////
 // =================== APPS ===================================
 
 bool is_running(const std::string& exe_name) {
@@ -394,6 +436,16 @@ int main() {
 
         std::cout << "Request: " << route << std::endl;
 
+
+///////
+        if (route.find(".bmp") != std::string::npos || route.find(".avi") != std::string::npos) {
+            // Loại bỏ dấu '/' ở đầu (ví dụ: "/screenshot.bmp" -> "screenshot.bmp")
+            std::string filename = route.substr(1); 
+            serve_file(client_socket, filename);
+            closesocket(client_socket);
+            continue; // Xử lý xong thì tiếp tục vòng lặp mới
+        }
+        ///////
         // --- ROUTER ---
         if (route == "/ping") {
             response = http_response("pong");
@@ -436,26 +488,47 @@ int main() {
             response = system_control("restart");
         }
 
+        // else if (route == "/screenshot") {
+        //     std::string filename = take_screenshot();
+        //     response = http_response("Screenshot saved as: " + filename);
+        // }
+
+        // // --- ROUTE QUAY WEBCAM ---
+        // else if (route == "/webcam") {
+        //     int duration = 10;
+        //     if (query.find("duration") != query.end()) {
+        //         try { duration = std::stoi(query["duration"]); } catch(...) {}
+        //     }
+
+        //     std::cout << "Recording webcam for " << duration << "s..." << std::endl;
+        //     std::string filename = start_webcam_recording(duration);
+        //     response = http_response("Started recording webcam. File: " + filename);
+        // }
+
+/////////
         else if (route == "/screenshot") {
-            std::string filename = take_screenshot();
-            response = http_response("Screenshot saved as: " + filename);
+            std::string filename = take_screenshot(); 
+            // Trả về tên file để JS biết đường dẫn mà tải
+            response = http_response("/" + filename); 
         }
 
-        // --- ROUTE QUAY WEBCAM ---
+        // 4. SỬA LẠI WEBCAM (Hỗ trợ cả GET để dễ test)
         else if (route == "/webcam") {
             int duration = 10;
-            if (query.find("duration") != query.end()) {
-                try { duration = std::stoi(query["duration"]); } catch(...) {}
+            // Ưu tiên đọc từ Query Param (GET) vì dễ xử lý hơn body JSON trong C++ thuần
+            if (query.count("seconds")) {
+                try { duration = std::stoi(query["seconds"]); } catch(...) {}
             }
-
-            std::cout << "Recording webcam for " << duration << "s..." << std::endl;
+            
+            // Quay video
             std::string filename = start_webcam_recording(duration);
-            response = http_response("Started recording webcam. File: " + filename);
+            
+            // Trả về đường dẫn file (ví dụ: /webcam_5s.avi)
+            response = http_response("/" + filename);
         }
-
-
+        ///////////////
         else {
-            response = http_response("Feature not implemented yet (Screenshot/Webcam req OpenCV)", "404 Not Found");
+            response = http_response("Not Found", "404 Not Found");
         }
 
         send(client_socket, response.c_str(), response.length(), 0);

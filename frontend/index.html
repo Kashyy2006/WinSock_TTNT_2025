@@ -6,111 +6,8 @@
     <title>Remote Control Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-
-    <style>
-        
-        :root {
-            --bg-body: #241D4C;
-            --bg-sidebar: #151128; 
-            --bg-card: #2D2552; 
-            --text-main: #FFFFFF;
-            --text-muted: #A5B4FC;
-            --primary: #D946EF; 
-            --success: #2DD4BF;
-            --danger: #FB7185;  
-            --warning: #FACC15; 
-            --radius: 12px;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; }
-
-        .sidebar {
-            width: 100%;
-            background-color: var(--bg-sidebar);
-            display: flex;
-            flex-direction: row;
-            justify-content: space-between;
-            padding: 20px;
-            align-items: center;
-            border-bottom: 1px solid #475569;
-        }
-
-        .logo {
-            font-size: 25px;
-            font-weight: 700;
-            color: var(--primary);
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-direction: row-reverse;
-        }
-        
-        .connection-box {
-            background: rgba(0,0,0,0.2);
-            padding: 10px;
-            border-radius: var(--radius);
-            border: 1px solid #475569;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            flex-direction: column;
-        }
-
-        #connectionPanel,#disconnectPanel{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        #connectStatus,#ipInput{
-            width: 275px;
-        }
-
-        .connection-box input { width: 100%; background: var(--bg-body); border: 1px solid #475569; color: white; padding: 8px; border-radius: 6px; }
-        
-        .nav-links { display: flex; flex-direction: row; gap: 5px; }
-        
-        .nav-btn {
-            background: transparent; border: none; color: var(--text-muted);
-            padding: 10px 20px; text-align: left; cursor: pointer; border-radius: 8px;
-            font-size: 15px; display: flex; align-items: center; gap: 12px; transition: 0.2s;
-            width: 100%; flex-direction: column;
-        }
-        .nav-btn:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--text-main); }
-        .nav-btn.active { background-color: var(--primary); color: white; }
-
-        /* Main Content */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .content-area { flex: 1; position: fixed; left: 300px; right: 300px; margin-top: 50px; overflow-y: auto; }
-        
-        /* Utility */
-        .page { display: none; animation: fadeIn 0.3s ease; }
-        .page.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        h2 { margin-bottom: 20px; border-bottom: 1px solid var(--bg-card); padding-bottom: 10px; }
-        .card { background: var(--bg-sidebar); border-radius: var(--radius); padding: 25px; border: 1px solid #475569; }
-        .control-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; justify-content: space-evenly;}
-        input.main-input { flex: 1; background: var(--bg-body); border: 1px solid #475569; color: white; padding: 12px; border-radius: 8px; }
-        
-        /* Buttons */
-        .action-btn { padding: 9px 15px; border-radius: 8px; border: none; cursor: pointer; color: white; background: var(--bg-card); display: flex; align-items: center; gap: 8px; font-weight: 600; }
-        .btn-primary { background: var(--primary); }
-        .btn-danger { background: var(--danger); font-size: 20px; display: flex; flex-direction: column; padding: 15px; }
-        .btn-green { background: var(--success); font-size: 20px; display: flex; flex-direction: column; padding: 15px; }
-        .btn-block { width: 100%; justify-content: center; }
-
-        /* Terminal */
-        .terminal { background: #0f172a; color: #10b981; font-family: 'JetBrains Mono', monospace; padding: 15px; border-radius: 8px; border: 1px solid #334155; min-height: 200px; max-height: 400px; overflow-y: auto; list-style: none; }
-        .terminal li { margin-bottom: 5px; border-bottom: 1px solid #334155; padding-bottom: 2px; }
-
-        /* Toast */
-        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: var(--bg-sidebar); color: white; padding: 15px 25px; border-radius: 8px; border-left: 4px solid var(--success); display: flex; align-items: center; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); animation: slideIn 0.3s; }
-        .toast.error { border-left-color: var(--danger); }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    
 </head>
 <body>
 
@@ -194,6 +91,7 @@
                             <i class="fa-solid fa-camera"></i> Screenshot
                     </button>
                 </div>
+                <div id="mediaResult" style="margin-top:10px; color: cyan; font-size: 14px;"> </div>
             </div>
             <div id="webcam" class="page">
                 <h2>Webcam view</h2>
@@ -206,11 +104,12 @@
                         <button onclick="stopOnWebcam()" class="action-btn btn-danger">
                             <i class="fa-solid fa-eye-slash"></i> Tắt Camera
                         </button>
-
-                        <input id="recSeconds" type="number" value="5" placeholder="Số giây quay">
-                        <button onclick="sendCommand('recordVideo')" class="action-btn btn-primary">
-                            <i class="fa-solid fa-video"></i> Quay & Lưu
-                        </button>
+                        <div class="record" style="align-items: center; display: flex; gap: 10px;">
+                            <input id="recSeconds" type="number" value="5" placeholder="Số giây quay" style="background: var(--bg-body); border: 1px solid #475569; color: white;padding: 12px; border-radius: 8px;">
+                            <button onclick="sendCommand('recordVideo')" class="action-btn btn-primary" style="font-size: 20px; display: flex; flex-direction: column; padding: 15px;" >
+                                <i class="fa-solid fa-video"></i> Quay & Lưu
+                            </button>
+                        </div>
                     </div>
                     <div id="onWebcamContainer" style="background: black; min-height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <span style="color: #64748b;">Màn hình Camera</span>
@@ -224,7 +123,7 @@
 <div id="webcamResult" style="color: cyan; font-size: 13px; margin-top: 5px;"></div>
                         
                     </div>
-                    <div id="mediaResult" style="margin-top:10px; color: cyan; font-size: 14px;"></div>
+
                     <div id="system" class="page">
                 <h2>System Control</h2>
                 <div class="card">
@@ -243,116 +142,8 @@
     </div>
 
     <div id="toast-container"></div>
+
     <script src="script.js"></script>
-    <script>
-        function switchTab(tabId, btn) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            btn.classList.add('active');
-        };
-    </script>
 
-    <script>
-    // Hàm gọi API Screenshot
-    function triggerScreenshot() {
-        document.getElementById("mediaResult").innerText = "Taking screenshot...";
-        fetch('/screenshot')
-            .then(res => res.text())
-            .then(data => {
-                document.getElementById("mediaResult").innerText = data;
-            });
-    }
-    </script>
-
-    <script>
-    // 1. Cấu hình IP Server (Lấy IP hiện tại của trình duyệt hoặc gán cứng IP máy server)
-    const IP = window.location.hostname || "127.0.0.1"; 
-    const PORT = 6969;
-
-    function showToast(message, type) {
-        console.log(`[${type}] ${message}`);
-    }
-
-    // Hàm gửi dữ liệu xuống Server (Backend C++)
-    async function postControl(data) {
-        try {
-            // Gửi request POST đến đường dẫn /webcam
-            // Server C++ sẽ đọc body để tìm "seconds"
-            const response = await fetch(`http://${IP}:${PORT}/webcam`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data) 
-            });
-            return await response.text();
-        } catch (error) {
-            console.error("Lỗi kết nối:", error);
-            return "Error: Không kết nối được Server";
-        }
-    }
-
-
-    // 1. Hàm bật giao diện Camera (startOnWebcam)
-    function startOnWebcam() {
-        const container = document.getElementById('onWebcamContainer');
-        if(container) {
-            container.style.display = 'flex';
-            container.innerHTML = '<span style="color: #4ade80;">Camera Active (Ready to Record)</span>';
-        }
-        showToast("Camera mode on!", "success");
-    }
-
-    // 2. Hàm tắt giao diện Camera (stopOnWebcam)
-    function stopOnWebcam() {
-        const container = document.getElementById('onWebcamContainer');
-        if(container) {
-            container.innerHTML = '<span style="color: #64748b;">Màn hình Camera (Đã tắt)</span>';
-        }
-        showToast("Camera mode off!", "error");
-    }
-
-    // 3. Hàm gửi lệnh quay (sendCommand) - Quan trọng nhất
-    async function sendCommand(cmd) {
-        if(cmd === 'recordVideo') {
-            const secInput = document.getElementById('recSeconds');
-            const sec = secInput ? secInput.value : 5; // Mặc định 5s nếu không tìm thấy input
-            
-            showToast(`🎥 Recording ${sec}s...`, "info");
-            
-            // --- Gửi lệnh xuống C++ ---
-            // Server C++ chờ lệnh này, quay video, rồi trả về đường dẫn file
-            const path = await postControl({ command: 'recordVideo', seconds: sec });
-            
-            // Xử lý kết quả trả về
-            const resultDiv = document.getElementById('recordResult');
-            
-            if(path.includes("Error") || path.includes("Loi") || path.includes("404")) {
-                showToast("Recording errors!", "error");
-                if(resultDiv) resultDiv.innerHTML = `<div style="color:red">Lỗi: ${path}</div>`;
-            } else {
-                // Tạo URL tải về (Thêm timestamp để tránh cache)
-                const timestamp = new Date().getTime();
-                const fullUrl = `http://${IP}:${PORT}${path}`;
-                const downloadName = `Evidence_${timestamp}.avi`;
-
-                // Hiển thị nút tải về (Vì trình duyệt không xem được AVI trực tiếp)
-                if(resultDiv) {
-                    resultDiv.innerHTML = `
-                    <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">
-                        <p style="color: #cbd5e1; margin-bottom: 5px;">✅ Quay thành công!</p>
-                        <a href="${fullUrl}" download="${downloadName}" 
-                           style="background-color: #e25ab2; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                           <i class="fa-solid fa-download"></i> Tải Video Về (.avi)
-                        </a>
-                    </div>`;
-                }
-                
-                showToast("Đã xong! Video đã sẵn sàng.", "success");
-            }
-        }
-    }
-</script>
-    
-    </script>
 </body>
 </html>

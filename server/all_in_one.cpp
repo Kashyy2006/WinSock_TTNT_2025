@@ -1,3 +1,5 @@
+#include <opencv2/opencv.hpp>
+#include <mutex>
 #include <iostream>
 #include <thread>
 #include <winsock2.h>
@@ -312,83 +314,86 @@ std::string take_screenshot() {
 }
 
 // ====================== LOGIC WEBCAM  ======================
-void record_webcam_thread_func(std::string filename, int duration_ms) {
-    std::cout << "[Webcam] Dang khoi tao cua so..." << std::endl;
+cv::Mat latest_frame;
+std::mutex frame_mutex;
+bool webcam_running = false;
+std::thread webcam_thread;
 
-    HWND hWndC = capCreateCaptureWindowA(
-        "Webcam Recorder", 
-        WS_VISIBLE | WS_OVERLAPPEDWINDOW, 
-        100, 100, 320, 240, 
-        NULL, 0
-    );
+// Webcam stream thread
+void webcam_stream_thread() {
+    cv::VideoCapture cap(0, cv::CAP_DSHOW);
+    if (!cap.isOpened()) return;
 
-    if (!hWndC) {
-        std::cerr << "[ERROR] Khong the tao cua so Webcam!" << std::endl;
-        return;
-    }
+    // Set độ phân giải 1080p
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+    cap.set(cv::CAP_PROP_FPS, 30);
 
-    bool isConnected = false;
+    webcam_running = true;
+    cv::Mat frame;
 
-    // --- VÒNG LẶP QUÉT DRIVER (Từ 0 đến 9) ---
-    for (int driverIndex = 0; driverIndex < 10; driverIndex++) {
-        if (SendMessage(hWndC, WM_CAP_DRIVER_CONNECT, driverIndex, 0)) {
-            std::cout << "[Webcam] Ket noi THANH CONG voi Driver index: " << driverIndex << std::endl;
-            isConnected = true;
-            break; // Tìm thấy rồi thì thoát vòng lặp
-        }
-    }
+    while (webcam_running) {
+        cap >> frame;
+        if (frame.empty()) continue;
 
-    if (isConnected) {
-        // Cấu hình Preview
-        SendMessage(hWndC, WM_CAP_SET_SCALE, TRUE, 0);
-        SendMessage(hWndC, WM_CAP_SET_PREVIEWRATE, 66, 0);
-        SendMessage(hWndC, WM_CAP_SET_PREVIEW, TRUE, 0);
-
-        // Thiết lập file lưu (Dùng đường dẫn tuyệt đối nếu cần)
-        if (SendMessage(hWndC, WM_CAP_FILE_SET_CAPTURE_FILEA, 0, (LPARAM)filename.c_str())) {
-             std::cout << "[Webcam] File save location: " << filename << std::endl;
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            latest_frame = frame.clone(); // Luôn giữ frame mới nhất
         }
 
-        CAPTUREPARMS CaptureParms;
-        SendMessage(hWndC, WM_CAP_GET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
-
-        CaptureParms.dwRequestMicroSecPerFrame = (1000000 / 15); // 15 FPS
-        CaptureParms.fYield = TRUE; 
-        CaptureParms.fAbortLeftMouse = FALSE;
-        CaptureParms.fAbortRightMouse = FALSE;
-        CaptureParms.fMakeUserHitOKToCapture = FALSE;
-        CaptureParms.fCaptureAudio = FALSE; 
-        CaptureParms.fLimitEnabled = TRUE;
-        CaptureParms.wTimeLimit = duration_ms / 1000;
-
-        SendMessage(hWndC, WM_CAP_SET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
-
-        std::cout << "[Webcam] Dang quay (" << duration_ms/1000 << "s)..." << std::endl;
-        
-        if (SendMessage(hWndC, WM_CAP_SEQUENCE, 0, 0)) {
-            std::cout << "[Webcam] Xong! File da duoc tao." << std::endl;
-        } else {
-            std::cerr << "[ERROR] Loi trong qua trinh ghi file." << std::endl;
-        }
-
-        SendMessage(hWndC, WM_CAP_DRIVER_DISCONNECT, 0, 0);
-    } 
-    else {
-        // Nếu quét từ 0-9 mà vẫn không được
-        std::cerr << "[CRITICAL ERROR] Khong tim thay bat ky Webcam nao (Index 0-9)!" << std::endl;
-        std::cerr << "Loi khuyen: Kiem tra quyen Privacy hoac Driver." << std::endl;
+        cv::waitKey(30);
     }
 
-    DestroyWindow(hWndC);
+    cap.release();
+    webcam_running = false;
 }
 
-std::string start_webcam_recording(int duration_sec) {
-    std::string filename = "webcam_" + std::to_string(duration_sec) + "s.avi";
-    // Chạy thread riêng để không treo server
-    std::thread t(record_webcam_thread_func, filename, duration_sec * 1000);
-    t.detach(); 
-    return filename;
+void start_webcam() {
+    if (!webcam_running) {
+        webcam_thread = std::thread(webcam_stream_thread);
+        webcam_thread.detach();
+    }
 }
+
+void stop_webcam() {
+    webcam_running = false;
+}
+
+// Get latest frame for MJPEG
+bool get_latest_frame(std::vector<uchar>& buffer) {
+    std::lock_guard<std::mutex> lock(frame_mutex);
+    if (latest_frame.empty()) return false;
+    cv::imencode(".jpg", latest_frame, buffer);
+    return true;
+}
+
+// Record video to AVI
+void record_webcam_thread_func(const std::string& filename, int duration_ms) {
+    cv::VideoCapture cap(0, cv::CAP_DSHOW);
+    if (!cap.isOpened()) return;
+
+    // 1080p
+    int width = 1920;
+    int height = 1080;
+    int fps = 15;
+
+    cv::VideoWriter writer(filename, cv::VideoWriter::fourcc('M','J','P','G'), fps, cv::Size(width, height));
+    if (!writer.isOpened()) return;
+
+    int total_frames = fps * duration_ms / 1000;
+    cv::Mat frame;
+
+    for (int i = 0; i < total_frames; ++i) {
+        cap >> frame;
+        if (frame.empty()) continue;
+        writer.write(frame);
+        cv::waitKey(1000 / fps);
+    }
+
+    writer.release();
+    cap.release();
+}
+///////////////////////////////////////////
 
 
 int main() {
@@ -487,25 +492,6 @@ int main() {
         else if (route == "/restart") {
             response = system_control("restart");
         }
-
-        // else if (route == "/screenshot") {
-        //     std::string filename = take_screenshot();
-        //     response = http_response("Screenshot saved as: " + filename);
-        // }
-
-        // // --- ROUTE QUAY WEBCAM ---
-        // else if (route == "/webcam") {
-        //     int duration = 10;
-        //     if (query.find("duration") != query.end()) {
-        //         try { duration = std::stoi(query["duration"]); } catch(...) {}
-        //     }
-
-        //     std::cout << "Recording webcam for " << duration << "s..." << std::endl;
-        //     std::string filename = start_webcam_recording(duration);
-        //     response = http_response("Started recording webcam. File: " + filename);
-        // }
-
-/////////
         else if (route == "/screenshot") {
             std::string filename = take_screenshot(); 
             // Trả về tên file để JS biết đường dẫn mà tải
@@ -513,18 +499,68 @@ int main() {
         }
 
         // 4. SỬA LẠI WEBCAM (Hỗ trợ cả GET để dễ test)
+        else if (route == "/webcam/start") {
+            start_webcam();
+            response = http_response("Webcam started");
+        }
+        else if (route == "/webcam/stop") {
+            stop_webcam();
+            response = http_response("Webcam stopped");
+        }
+
+        // MJPEG stream
+        else if (route.find("/snapshot_stream") != std::string::npos) {
+            std::vector<uchar> jpeg_buf;
+            if (get_latest_frame(jpeg_buf)) {
+                std::string header = "HTTP/1.1 200 OK\r\n";
+                header += "Content-Type: image/jpeg\r\n";
+                header += "Content-Length: " + std::to_string(jpeg_buf.size()) + "\r\n";
+                header += "Connection: close\r\n\r\n";
+
+                send(client_socket, header.c_str(), header.size(), 0);
+                send(client_socket, reinterpret_cast<char*>(jpeg_buf.data()), jpeg_buf.size(), 0);
+            } else {
+                std::string err = "HTTP/1.1 404 Not Found\r\n\r\n";
+                send(client_socket, err.c_str(), err.size(), 0);
+            }
+        }
+
+        // Quay video
         else if (route == "/webcam") {
             int duration = 10;
-            // Ưu tiên đọc từ Query Param (GET) vì dễ xử lý hơn body JSON trong C++ thuần
             if (query.count("seconds")) {
                 try { duration = std::stoi(query["seconds"]); } catch(...) {}
             }
-            
-            // Quay video
-            std::string filename = start_webcam_recording(duration);
-            
-            // Trả về đường dẫn file (ví dụ: /webcam_5s.avi)
-            response = http_response("/" + filename);
+            std::string filename = "webcam_" + std::to_string(duration) + "s.avi";
+            std::thread t(record_webcam_thread_func, filename, duration * 1000);
+            t.detach();
+
+            response = http_response("/" + filename); // trả về đường dẫn file
+        }
+
+        // Tải video AVI
+        else if (route.find(".avi") != std::string::npos) {
+            std::string filename = route.substr(1);
+            std::ifstream file(filename, std::ios::binary | std::ios::ate);
+            if (file.is_open()) {
+                std::streamsize size = file.tellg();
+                file.seekg(0, std::ios::beg);
+                std::vector<char> buffer(size);
+                if (file.read(buffer.data(), size)) {
+                    std::string header = "HTTP/1.1 200 OK\r\n";
+                    header += "Content-Type: video/x-msvideo\r\n";
+                    header += "Content-Disposition: attachment; filename=\"" + filename + "\"\r\n";
+                    header += "Content-Length: " + std::to_string(size) + "\r\n";
+                    header += "Connection: close\r\n\r\n";
+
+                    send(client_socket, header.c_str(), header.size(), 0);
+                    send(client_socket, buffer.data(), buffer.size(), 0);
+                }
+                file.close();
+            } else {
+                std::string notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+                send(client_socket, notFound.c_str(), notFound.size(), 0);
+            }
         }
         ///////////////
         else {

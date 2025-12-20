@@ -75,14 +75,14 @@
             background: transparent; border: none; color: var(--text-muted);
             padding: 10px 20px; text-align: left; cursor: pointer; border-radius: 8px;
             font-size: 15px; display: flex; align-items: center; gap: 12px; transition: 0.2s;
-            width: 100%;
+            width: 100%; flex-direction: column;
         }
         .nav-btn:hover { background-color: rgba(255, 255, 255, 0.05); color: var(--text-main); }
         .nav-btn.active { background-color: var(--primary); color: white; }
 
         /* Main Content */
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .content-area { flex: 1; padding: 30px; overflow-y: auto; }
+        .content-area { flex: 1; position: fixed; left: 300px; right: 300px; margin-top: 50px; overflow-y: auto; }
         
         /* Utility */
         .page { display: none; animation: fadeIn 0.3s ease; }
@@ -91,14 +91,14 @@
         
         h2 { margin-bottom: 20px; border-bottom: 1px solid var(--bg-card); padding-bottom: 10px; }
         .card { background: var(--bg-sidebar); border-radius: var(--radius); padding: 25px; border: 1px solid #475569; }
-        .control-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .control-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; justify-content: space-evenly;}
         input.main-input { flex: 1; background: var(--bg-body); border: 1px solid #475569; color: white; padding: 12px; border-radius: 8px; }
         
         /* Buttons */
         .action-btn { padding: 9px 15px; border-radius: 8px; border: none; cursor: pointer; color: white; background: var(--bg-card); display: flex; align-items: center; gap: 8px; font-weight: 600; }
         .btn-primary { background: var(--primary); }
-        .btn-danger { background: var(--danger); }
-        .btn-green { background: var(--success); }
+        .btn-danger { background: var(--danger); font-size: 20px; display: flex; flex-direction: column; padding: 15px; }
+        .btn-green { background: var(--success); font-size: 20px; display: flex; flex-direction: column; padding: 15px; }
         .btn-block { width: 100%; justify-content: center; }
 
         /* Terminal */
@@ -129,7 +129,7 @@
 
             <div id="disconnectPanel" style="display: none;">
                 <div id="connectStatus" style="font-size: 13px; word-break: break-all;">Connected</div>
-                <button id="btnDisconnect" class="action-btn btn-danger btn-block">
+                <button id="btnDisconnect" class="action-btn btn-danger btn-block" style="display: flex;flex-direction: row; padding: 5px;">
                     <i class="fa-solid fa-link-slash"></i> Disconnect
                 </button>
             </div>
@@ -139,7 +139,8 @@
             <button class="nav-btn active" onclick="switchTab('application', this)"><i class="fa-solid fa-window-maximize"></i> Apps</button>
             <button class="nav-btn" onclick="switchTab('process', this)"><i class="fa-solid fa-microchip"></i> Processes</button>
             <button class="nav-btn" onclick="switchTab('keylogger', this)"><i class="fa-regular fa-keyboard"></i> Keylogger</button>
-            <button class="nav-btn" onclick="switchTab('monitor', this)"><i class="fa-solid fa-camera"></i> Monitor</button>
+            <button class="nav-btn" onclick="switchTab('screenshot', this)"><i class="fa-regular fa-keyboard"></i> Screenshot</button>
+            <button class="nav-btn" onclick="switchTab('webcam', this)"><i class="fa-solid fa-camera"></i> Webcam</button>
             <button class="nav-btn" onclick="switchTab('system', this)"><i class="fa-solid fa-power-off"></i> System</button>
         </div>
     </nav>
@@ -152,8 +153,8 @@
                 <div class="card">
                     <div class="control-row">
                         <input id="appName" class="main-input" placeholder="Enter app name (notepad, calc, chrome...)">
-                        <button onclick="sendCommand('startApp')" class="action-btn btn-green"><i class="fa-solid fa-play"></i> Start</button>
-                        <button onclick="sendCommand('stopApp')" class="action-btn btn-danger"><i class="fa-solid fa-stop"></i> Stop</button>
+                        <button onclick="sendCommand('startApp')" class="action-btn btn-green" style="flex-direction: row; padding: 10px;" ><i class="fa-solid fa-play"> </i> Start</button>
+                        <button onclick="sendCommand('stopApp')" class="action-btn btn-danger" style="flex-direction: row; padding: 10px;"><i class="fa-solid fa-stop"></i> Stop</button>
                     </div>
                     <div class="control-row">
                         <button onclick="sendCommand('listApp')" class="action-btn"><i class="fa-solid fa-rotate"></i> Refresh List</button>
@@ -169,8 +170,8 @@
                 <div class="card">
                     <div class="control-row">
                         <input id="processName" class="main-input" placeholder="Enter Process Name (e.g., notepad.exe)">
-                        <button onclick="sendCommand('stopProcess')" class="action-btn btn-danger"><i class="fa-solid fa-skull"></i> Kill Process</button>
-                        <button onclick="sendCommand('listProcess')" class="action-btn"><i class="fa-solid fa-list-check"></i> List All</button>
+                        <button onclick="sendCommand('stopProcess')" class="action-btn btn-danger" style="flex-direction: row; padding: 10px;"><i class="fa-solid fa-skull"></i> Kill Process</button>
+                        <button onclick="sendCommand('listProcess')" class="action-btn" style="flex-direction: row; padding: 10px; font-size: 20px;" ><i class="fa-solid fa-list-check"></i> List All</button>
                     </div>
                     <ul id="processList" class="terminal" style="height: 500px;"></ul>
                 </div>
@@ -180,34 +181,25 @@
                 <h2>Keylogger View</h2>
                 <div class="card">
                     <div class="control-row">
-                        <button onclick="sendCommand('getKeylog')" class="action-btn btn-primary"><i class="fa-solid fa-download"></i> Fetch Logs</button>
+                        <button onclick="sendCommand('getKeylog')" class="action-btn btn-primary" style="display: flex; flex-direction: row; padding: 15px; font-size: 20px;"><i class="fa-solid fa-download"></i> Fetch Logs</button>
                     </div>
                     <div id="keylogResult" class="terminal" style="color: #fbbf24; white-space: pre-wrap;">No data fetched yet.</div>
                 </div>
             </div>
 
-            <div id="monitor" class="page">
-                <h2>Monitor View</h2>
-                <!-- <div class="card">
-                <div class="control-row">
-                    <button onclick="sendCommand('screenshot')" class="action-btn" style="background: #e67e22;">
-                        <i class="fa-solid fa-camera"></i> Screenshot
-                    </button>
-                    <div id="webcamPanel" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                        <input type="number" id="timeInput" placeholder="Seconds" value="10" 
-                        style="width: 60px; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; text-align: center;">
-                            
-                    <button id="btnTime" onclick="startWebcamCustom()" class="action-btn" style="background: #9b59b6; cursor: pointer;">
-                        <i class="fa-solid fa-video"></i> Record Webcam
-                    </button>
-                </div> -->
-
-                    <div class="card">
-                    <h3>Monitor</h3>
-                    <div class="control-row">
-                        <button onclick="sendCommand('screenshot')" class="action-btn" style="background: #e67e22;">
+            <div id="screenshot" class="page">
+                <h2>Screenshot</h2>
+                <div class="card"  style="display: flex; justify-content: space-around;">
+                    <button onclick="sendCommand('screenshot')" class="action-btn" style="background: #e67e22; display: flex; flex-direction: column; padding: 30px; font-size: 20px;">
                             <i class="fa-solid fa-camera"></i> Screenshot
-                        </button>
+                    </button>
+                </div>
+            </div>
+            <div id="webcam" class="page">
+                <h2>Webcam view</h2>
+                    <div class="card">
+                    <div class="control-row">
+
                         <button onclick="startOnWebcam()" class="action-btn btn-green">
                             <i class="fa-solid fa-eye"></i> Bật Camera
                         </button>
@@ -233,19 +225,19 @@
                         
                     </div>
                     <div id="mediaResult" style="margin-top:10px; color: cyan; font-size: 14px;"></div>
-                </div>
-            </div>
-
-            <div id="system" class="page">
+                    <div id="system" class="page">
                 <h2>System Control</h2>
                 <div class="card">
-                    <p style="color: var(--text-muted); margin-bottom: 20px;">Nguy hiểm: Hành động này sẽ tắt hoặc khởi động lại máy chủ.</p>
+                    <p style="color: var(--text-muted); margin-bottom: 20px; align-items: center;display: flex; justify-content: space-around; "> Nguy hiểm: Hành động này sẽ tắt hoặc khởi động lại máy chủ.</p>
                     <div class="control-row">
                         <button onclick="sendCommand('shutdown')" class="action-btn btn-danger"><i class="fa-solid fa-power-off"></i> Shutdown (60s)</button>
-                        <button onclick="sendCommand('restart')" class="action-btn btn-warning" style="color: #0f172a;"><i class="fa-solid fa-rotate"></i> Restart (60s)</button>
+                        <button onclick="sendCommand('restart')" class="action-btn btn-warning" style="color: #0f172a; font-size: 20px; display: flex; flex-direction: column; padding: 15px; "><i class="fa-solid fa-rotate"></i> Restart (60s)</button>
                     </div>
                 </div>
             </div>
+                </div>
+            </div>
+
 
         </div>
     </div>
@@ -278,11 +270,8 @@
     const IP = window.location.hostname || "127.0.0.1"; 
     const PORT = 6969;
 
-    // Hàm hỗ trợ hiển thị thông báo (Giả lập Toast nếu bạn chưa có thư viện Toast)
     function showToast(message, type) {
         console.log(`[${type}] ${message}`);
-        // Nếu bạn có thư viện toast thì dùng, không thì dùng alert tạm
-        // alert(message); 
     }
 
     // Hàm gửi dữ liệu xuống Server (Backend C++)
@@ -310,7 +299,7 @@
             container.style.display = 'flex';
             container.innerHTML = '<span style="color: #4ade80;">Camera Active (Ready to Record)</span>';
         }
-        showToast("Đã bật chế độ Camera", "success");
+        showToast("Camera mode on!", "success");
     }
 
     // 2. Hàm tắt giao diện Camera (stopOnWebcam)
@@ -319,7 +308,7 @@
         if(container) {
             container.innerHTML = '<span style="color: #64748b;">Màn hình Camera (Đã tắt)</span>';
         }
-        showToast("Đã tắt Camera", "error");
+        showToast("Camera mode off!", "error");
     }
 
     // 3. Hàm gửi lệnh quay (sendCommand) - Quan trọng nhất
@@ -328,7 +317,7 @@
             const secInput = document.getElementById('recSeconds');
             const sec = secInput ? secInput.value : 5; // Mặc định 5s nếu không tìm thấy input
             
-            showToast(`🎥 Đang quay ${sec}s... (Vui lòng chờ)`, "info");
+            showToast(`🎥 Recording ${sec}s...`, "info");
             
             // --- Gửi lệnh xuống C++ ---
             // Server C++ chờ lệnh này, quay video, rồi trả về đường dẫn file
@@ -338,7 +327,7 @@
             const resultDiv = document.getElementById('recordResult');
             
             if(path.includes("Error") || path.includes("Loi") || path.includes("404")) {
-                showToast("Lỗi khi quay video", "error");
+                showToast("Recording errors!", "error");
                 if(resultDiv) resultDiv.innerHTML = `<div style="color:red">Lỗi: ${path}</div>`;
             } else {
                 // Tạo URL tải về (Thêm timestamp để tránh cache)

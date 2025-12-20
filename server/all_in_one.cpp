@@ -16,19 +16,9 @@
 
 #pragma comment(lib, "Ws2_32.lib")
 
-//g++ all_in_one.cpp -o server.exe -lws2_32 -lgdi32 -lvfw32
-
 // Cấu hình
 const int PORT = 6969;
 const int BUFFER_SIZE = 4096;
-
-std::map<std::string, std::string> APPS = {
-    {"notepad", "notepad.exe"},
-    {"mspaint", "mspaint.exe"},
-    {"cmd", "cmd.exe"},
-    {"calc", "calc.exe"},
-    {"chrome", "chrome.exe"}
-};
 
 // Hàm helper trả về HTTP Response có CORS header (quan trọng để JS gọi được)
 std::string http_response(const std::string& body, const std::string& status = "200 OK", const std::string& content_type = "text/html") {
@@ -41,11 +31,6 @@ std::string http_response(const std::string& body, const std::string& status = "
     response += body;
     return response;
 }
-
-
-
-////////////////
-
 
 void serve_file(SOCKET client_socket, const std::string& filepath) {
     std::ifstream file(filepath, std::ios::binary | std::ios::ate);
@@ -60,22 +45,18 @@ void serve_file(SOCKET client_socket, const std::string& filepath) {
 
     std::vector<char> buffer(size);
     if (file.read(buffer.data(), size)) {
-        // Xác định loại file (MIME type)
         std::string content_type = "application/octet-stream";
         if (filepath.find(".bmp") != std::string::npos) content_type = "image/bmp";
         else if (filepath.find(".avi") != std::string::npos) content_type = "video/x-msvideo";
 
-        // Tạo Header HTTP chuẩn
         std::string header = "HTTP/1.1 200 OK\r\n";
         header += "Content-Type: " + content_type + "\r\n";
         header += "Content-Length: " + std::to_string(size) + "\r\n";
         header += "Access-Control-Allow-Origin: *\r\n";
         header += "Connection: close\r\n\r\n";
 
-        // Gửi Header trước
         send(client_socket, header.c_str(), header.length(), 0);
         
-        // Gửi dữ liệu file (Binary)
         send(client_socket, buffer.data(), size, 0);
     }
     file.close();
@@ -114,13 +95,12 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
 std::string list_apps() {
     std::stringstream rows;
     
-    // Gọi EnumWindows, truyền địa chỉ của 'rows' vào tham số lParam
     EnumWindows(EnumWindowsProc, (LPARAM)&rows);
     
     return http_response(rows.str());
 }
 
-// ============== processess         =================================
+// ===================== processes =================================
 std::string list_processes() {
     std::stringstream rows;
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -418,7 +398,6 @@ int main() {
         recv(client_socket, buffer, BUFFER_SIZE, 0);
         
         std::string request(buffer);
-        // Lấy dòng đầu tiên: GET /path HTTP/1.1
         std::stringstream ss(request);
         std::string method, full_path;
         ss >> method >> full_path;
@@ -433,6 +412,7 @@ int main() {
         std::string response;
 
         std::cout << "Request: " << route << std::endl;
+
         // --- ROUTER ---
         if (route == "/ping") {
             response = http_response("pong");
@@ -449,14 +429,13 @@ int main() {
         }
         else if (route == "/apps/start") {
             std::string name = query["name"];
-            if (APPS.count(name)) start_app_sys(APPS[name]);
-            else start_app_sys(name); // Thử mở trực tiếp nếu không có trong dict
+            if (name.length() >= 4 && name.substr(name.length() - 4) == ".exe") start_app_sys(name);
+            else start_app_sys(name);
             response = http_response("Started " + name);
         }
         else if (route == "/apps/stop") {
-            // Logic dừng app theo tên định nghĩa trong APPS
             std::string name = query["name"];
-            if (APPS.count(name)) stop_process_sys(APPS[name]);
+            if (name.length() >= 4 && name.substr(name.length() - 4) == ".exe") stop_process_sys(name);
             else stop_process_sys(name + ".exe");
             response = http_response("Stopped " + name);
         }
@@ -464,7 +443,6 @@ int main() {
             response = list_processes();
         }
         else if (route == "/processes/stop") {
-            // Nhận PID hoặc tên
             std::string target = query["name"]; // Dùng param 'name' cho thống nhất
             stop_process_sys(target); 
             response = http_response("Kill command sent to " + target);
@@ -485,7 +463,6 @@ int main() {
             std::string filename = take_screenshot(); 
             response = http_response("/" + filename); 
         }
-
         else if (route == "/webcam/start") {
             start_webcam();
             response = http_response("Webcam started");
@@ -504,9 +481,6 @@ int main() {
 
                 send(client_socket, header.c_str(), header.size(), 0);
                 send(client_socket, reinterpret_cast<char*>(jpeg_buf.data()), jpeg_buf.size(), 0);
-            } else {
-                std::string err = "HTTP/1.1 404 Not Found\r\n\r\n";
-                send(client_socket, err.c_str(), err.size(), 0);
             }
         }
         else if (route == "/webcam") {
@@ -538,9 +512,6 @@ int main() {
                     send(client_socket, buffer.data(), buffer.size(), 0);
                 }
                 file.close();
-            } else {
-                std::string notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-                send(client_socket, notFound.c_str(), notFound.size(), 0);
             }
         }
         else {

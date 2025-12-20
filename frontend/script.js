@@ -16,6 +16,10 @@ function switchTab(tabId, btn) {
 let streamInterval = null;
 
 async function startOnWebcam() {
+  if (!SERVER_IP) {
+    showToast("You are not connected to server!", "error");
+    return null;
+  }
   await fetch(`http://${SERVER_IP}:${PORT}/webcam/start`);
   const container = document.getElementById("onWebcamContainer");
   container.style.display = "flex";
@@ -36,6 +40,10 @@ async function startOnWebcam() {
 }
 
 async function stopOnWebcam() {
+  if (!SERVER_IP) {
+    showToast("You are not connected to server!", "error");
+    return null;
+  }
   await fetch(`http://${SERVER_IP}:${PORT}/webcam/stop`);
   if (streamInterval) clearInterval(streamInterval);
   streamInterval = null;
@@ -233,6 +241,10 @@ async function sendCommand(cmd) {
 
   // --- XỬ LÝ SCREENSHOT (Sửa để hiển thị ảnh) ---
   else if (cmd === "screenshot") {
+    if (!SERVER_IP) {
+      showToast("You are not connected to server!", "error");
+      return null;
+    }
     showToast("📸 Screenshoting...", "info");
     const path = await sendRequest("/screenshot"); // Server trả về "/screenshot.bmp"
 
@@ -257,6 +269,10 @@ async function sendCommand(cmd) {
   // --- XỬ LÝ WEBCAM (Sửa lỗi 404) ---
   // HTML gọi là 'recordVideo', nên ta bắt case này
   else if (cmd === "recordVideo") {
+    if (!SERVER_IP) {
+      showToast("You are not connected to server!", "error");
+      return null;
+    }
     const secInput = document.getElementById("recSeconds");
     const sec = secInput ? secInput.value : 5;
 

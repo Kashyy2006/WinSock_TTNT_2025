@@ -7,46 +7,39 @@
 #include "config.h"
 #include "http_utils.h"
 
-bool is_running(const std::string& exe_name) {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) return false;
-
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-
-    if (Process32First(hSnapshot, &pe)) {
-        do {
-            std::string current_exe(pe.szExeFile);
-            std::string target_exe = exe_name;
-            // So sánh không phân biệt hoa thường
-            std::transform(current_exe.begin(), current_exe.end(), current_exe.begin(), ::tolower);
-            std::transform(target_exe.begin(), target_exe.end(), target_exe.begin(), ::tolower);
-            if (current_exe == target_exe) {
-                CloseHandle(hSnapshot);
-                return true;
-            }
-        } while (Process32Next(hSnapshot, &pe));
-    }
-    CloseHandle(hSnapshot);
-    return false;
-}
-
 void start_app_sys(const std::string& exe_path) {
     ShellExecuteA(NULL, "open", exe_path.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
 
-std::string list_apps() {
-    std::string rows;
-    for (const auto& pair : APPS) {
-        std::string name = pair.first;
-        std::string exe = pair.second;
-        bool running = is_running(exe);
-        
-        // Trả về định dạng HTML cho list item
-        rows += "<li class='terminal-item'>";
-        rows += "<strong>" + name + "</strong> (" + exe + ")";
-        rows += running ? " <span style='color: #10b981'>[RUNNING]</span>" : " <span style='color: #64748b'>[STOPPED]</span>";
-        rows += "</li>";
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    char windowTitle[256];
+
+    // Chỉ lấy các cửa sổ đang hiển thị (Visible)
+    if (IsWindowVisible(hwnd)) {
+        // Lấy độ dài tiêu đề, bỏ qua cửa sổ không có tên
+        int length = GetWindowTextLength(hwnd);
+        if (length > 0) {
+            // Lấy tiêu đề cửa sổ
+            GetWindowTextA(hwnd, windowTitle, sizeof(windowTitle));
+
+            // Kiểm tra loại trừ "Program Manager" (thường là Desktop background) nếu muốn
+            if (std::string(windowTitle) != "Program Manager") {
+                 // Ép kiểu lParam về stringstream để ghi dữ liệu
+                std::stringstream* rows = reinterpret_cast<std::stringstream*>(lParam);
+                
+                // Format HTML theo yêu cầu
+                *rows << "<li>" << windowTitle << "</li>";
+            }
+        }
     }
-    return http_response(rows);
+    return TRUE; // Tiếp tục duyệt cửa sổ tiếp theo
+}
+
+// 2. Hàm chính để gọi trong server của bạn
+std::string list_apps() {
+    std::stringstream rows;
+    
+    EnumWindows(EnumWindowsProc, (LPARAM)&rows);
+    
+    return http_response(rows.str());
 }

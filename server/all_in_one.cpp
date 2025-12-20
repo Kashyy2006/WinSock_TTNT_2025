@@ -291,18 +291,29 @@ std::string take_screenshot() {
 // ====================== LOGIC WEBCAM  ======================
 cv::Mat latest_frame;
 std::mutex frame_mutex;
-bool webcam_running = false;
+std::atomic<bool> webcam_running(false);
+std::atomic<bool> is_recording(false); // Cờ kiểm soát việc ghi hình
 std::thread webcam_thread;
+std::thread record_thread;
 
 // Webcam stream thread
 void webcam_stream_thread() {
-    cv::VideoCapture cap(0, cv::CAP_DSHOW);
-    if (!cap.isOpened()) return;
+    // Dùng CAP_DSHOW trên Windows để khởi động nhanh hơn và cho phép chỉnh phân giải tốt hơn
+    cv::VideoCapture cap(0, cv::CAP_DSHOW); 
+    
+    if (!cap.isOpened()) {
+        std::cerr << "Error: Cannot open webcam" << std::endl;
+        return;
+    }
 
-    // Set độ phân giải 1080p
+    // Lưu ý: Nếu camera không hỗ trợ, OpenCV sẽ tự chọn độ phân giải gần nhất
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
     cap.set(cv::CAP_PROP_FPS, 30);
+
+    double actual_w = cap.get(cv::CAP_PROP_FRAME_WIDTH);
+    double actual_h = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+    std::cout << "Camera running at: " << actual_w << "x" << actual_h << std::endl;
 
     webcam_running = true;
     cv::Mat frame;
@@ -313,10 +324,8 @@ void webcam_stream_thread() {
 
         {
             std::lock_guard<std::mutex> lock(frame_mutex);
-            latest_frame = frame.clone(); // Luôn giữ frame mới nhất
-        }
-
-        cv::waitKey(30);
+            latest_frame = frame.clone(); 
+        } 
     }
 
     cap.release();
@@ -332,13 +341,27 @@ void start_webcam() {
 
 void stop_webcam() {
     webcam_running = false;
+    is_recording = false; 
 }
 
 // Get latest frame for MJPEG
 bool get_latest_frame(std::vector<uchar>& buffer) {
-    std::lock_guard<std::mutex> lock(frame_mutex);
-    if (latest_frame.empty()) return false;
-    cv::imencode(".jpg", latest_frame, buffer);
+    cv::Mat temp_frame;
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        if (latest_frame.empty()) return false;
+        temp_frame = latest_frame.clone(); // Copy nhanh để giải phóng mutex sớm
+    }
+
+    // TỐI ƯU HÓA: Thiết lập tham số nén JPEG
+    std::vector<int> params;
+    params.push_back(cv::IMWRITE_JPEG_QUALITY);
+    params.push_back(90);
+    
+    // Nếu muốn cực nét nhưng file nặng, dùng 100.
+    // Nếu muốn cân bằng tốc độ/chất lượng, dùng 90.
+
+    cv::imencode(".jpg", temp_frame, buffer, params);
     return true;
 }
 
@@ -478,7 +501,7 @@ int main() {
                 header += "Content-Type: image/jpeg\r\n";
                 header += "Content-Length: " + std::to_string(jpeg_buf.size()) + "\r\n";
                 header += "Connection: close\r\n\r\n";
-
+                
                 send(client_socket, header.c_str(), header.size(), 0);
                 send(client_socket, reinterpret_cast<char*>(jpeg_buf.data()), jpeg_buf.size(), 0);
             }
@@ -507,6 +530,7 @@ int main() {
                     header += "Content-Disposition: attachment; filename=\"" + filename + "\"\r\n";
                     header += "Content-Length: " + std::to_string(size) + "\r\n";
                     header += "Connection: close\r\n\r\n";
+
 
                     send(client_socket, header.c_str(), header.size(), 0);
                     send(client_socket, buffer.data(), buffer.size(), 0);

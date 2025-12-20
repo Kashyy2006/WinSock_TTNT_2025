@@ -4,6 +4,6 @@
 #include "config.h"
 #include "http_utils.h"
 
-bool is_running(const std::string& exe_name);
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam);
 void start_app_sys(const std::string& exe_path);
 std::string list_apps();

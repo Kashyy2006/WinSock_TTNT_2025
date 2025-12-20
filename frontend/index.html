@@ -99,25 +99,25 @@
                     <div class="control-row">
 
                         <button onclick="startOnWebcam()" class="action-btn btn-green">
-                            <i class="fa-solid fa-eye"></i> Bật Camera
+                            <i class="fa-solid fa-eye"></i> Camera on!
                         </button>
                         <button onclick="stopOnWebcam()" class="action-btn btn-danger">
-                            <i class="fa-solid fa-eye-slash"></i> Tắt Camera
+                            <i class="fa-solid fa-eye-slash"></i> Camera off!
                         </button>
                         <div class="record" style="align-items: center; display: flex; gap: 10px;">
-                            <input id="recSeconds" type="number" value="5" placeholder="Số giây quay" style="background: var(--bg-body); border: 1px solid #475569; color: white;padding: 12px; border-radius: 8px;">
+                            <input id="recSeconds" type="number" value="10" placeholder="Số giây quay" style="background: var(--bg-body); border: 1px solid #475569; color: white; padding: 12px; border-radius: 8px; font-size: 20px;">
                             <button onclick="sendCommand('recordVideo')" class="action-btn btn-primary" style="font-size: 20px; display: flex; flex-direction: column; padding: 15px;" >
-                                <i class="fa-solid fa-video"></i> Quay & Lưu
+                                <i class="fa-solid fa-video"></i> Record & Save
                             </button>
                         </div>
                     </div>
                     <div id="onWebcamContainer" style="background: black; min-height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                        <span style="color: #64748b;">Màn hình Camera</span>
+                        <span style="color: #64748b;">Camera Screen</span>
                     </div>
                 </div>
 
                 <div class="card">
-                    <div id="recordResult" class="terminal" style="min-height: 50px;">Kết quả quay sẽ hiện ở đây...</div>
+                    <div id="recordResult" class="terminal" style="min-height: 50px;">Record result will be display here...</div>
                 </div>
 
 <div id="webcamResult" style="color: cyan; font-size: 13px; margin-top: 5px;"></div>
@@ -127,7 +127,7 @@
                     <div id="system" class="page">
                 <h2>System Control</h2>
                 <div class="card">
-                    <p style="color: var(--text-muted); margin-bottom: 20px; align-items: center;display: flex; justify-content: space-around; "> Nguy hiểm: Hành động này sẽ tắt hoặc khởi động lại máy chủ.</p>
+                    <p style="color: var(--text-muted); margin-bottom: 20px; align-items: center;display: flex; justify-content: space-around; "> Dangerous! These functions can affect your computer!</p>
                     <div class="control-row">
                         <button onclick="sendCommand('shutdown')" class="action-btn btn-danger"><i class="fa-solid fa-power-off"></i> Shutdown (60s)</button>
                         <button onclick="sendCommand('restart')" class="action-btn btn-warning" style="color: #0f172a; font-size: 20px; display: flex; flex-direction: column; padding: 15px; "><i class="fa-solid fa-rotate"></i> Restart (60s)</button>

@@ -1,6 +1,6 @@
 Phần A: Cài đặt openCV
 
-- vào link "https://opencv.org/releases/" và tải openCV 4.12.0 cho windows
+- Vào link "https://opencv.org/releases/" và tải openCV 4.12.0 cho windows
 - Chạy file "opencv-4.12.0-windows" trong repo để cài opencv
 - Cài vào ổ đĩa C:/ sao cho thư mục openCV có đường dẫn: "C:\opencv" (nếu không phải sửa thêm file CMakeLists.txt để chạy)
 - Vào thanh Search tìm kiếm "Environments Variables"

@@ -12,7 +12,6 @@ function switchTab(tabId, btn) {
   btn.classList.add("active");
 }
 
-////////////////////////
 // 1. Hàm bật giao diện Camera (startOnWebcam)
 let streamInterval = null;
 
@@ -43,7 +42,7 @@ async function stopOnWebcam() {
 
   const container = document.getElementById("onWebcamContainer");
   container.innerHTML =
-    '<span style="color: #64748b;">Màn hình Camera (Đã tắt)</span>';
+    '<span style="color: #64748b;">Camera Screen off!</span>';
   showToast("Camera mode off!", "error");
 }
 
@@ -60,8 +59,8 @@ async function postControl(pathStr, params = {}) {
     });
     return await response.text();
   } catch (error) {
-    console.error("Lỗi kết nối:", error);
-    return "Error: Không kết nối được Server";
+    console.error("Connection Errors:", error);
+    return "Error: Server not connected!";
   }
 }
 
@@ -73,21 +72,20 @@ async function sendCommand(cmd) {
 
     stopOnWebcam();
 
-    showToast("Đang chuẩn bị Camera...", "info");
+    showToast("Repairing Camera...", "info");
     const resultDiv = document.getElementById("recordResult");
-    if (resultDiv)
-      resultDiv.innerHTML = "<div>⏳ Đang giải phóng Camera...</div>";
+    if (resultDiv) resultDiv.innerHTML = "<div>⏳ Releasing camera...</div>";
 
     setTimeout(async () => {
-      showToast(`🎥 Bắt đầu quay ${sec}s...`, "info");
+      showToast(`🎥 Recording for ${sec}s...`, "info");
       if (resultDiv)
-        resultDiv.innerHTML = `<div style="color:cyan">🔴 Đang quay video (${sec}s)...</div>`;
+        resultDiv.innerHTML = `<div style="color:cyan">🔴 Recording (${sec}s)...</div>`;
 
       const path = await postControl("/webcam", { seconds: sec });
 
       // Xử lý kết quả như cũ...
       if (path.includes("Error")) {
-        if (resultDiv) resultDiv.innerHTML = "Lỗi Server/Camera bận";
+        if (resultDiv) resultDiv.innerHTML = "Server Errors/ Camera is busy";
         return;
       }
 
@@ -98,14 +96,13 @@ async function sendCommand(cmd) {
           resultDiv.innerHTML = `
                     <div style="background:#1e293b; padding:10px; border-radius:8px; margin-top:5px;">
                         <p style="color:#4ade80">✅ Xong!</p>
-                        <a href="${fullUrl}" class="action-btn btn-primary">Tải Video</a>
+                        <a href="${fullUrl}" class="action-btn btn-primary">Download Video</a>
                     </div>`;
         }
       }, sec * 1000 + 1000);
     }, 1000); // Delay 1s
   }
 }
-//////////////
 
 function triggerScreenshot() {
   document.getElementById("mediaResult").innerText = "Taking screenshot...";
@@ -255,7 +252,6 @@ async function sendCommand(cmd) {
       showToast("Done!");
     }
     return;
-    return; // Kết thúc hàm, không chạy phần default ở dưới
   }
 
   // --- XỬ LÝ WEBCAM (Sửa lỗi 404) ---
@@ -267,7 +263,7 @@ async function sendCommand(cmd) {
     showToast(`🎥 Recording ${sec}s...`, "info");
     document.getElementById(
       "recordResult"
-    ).innerHTML = `<span style="color:var(--warning)">⏳ Đang quay video... vui lòng chờ ${sec}s</span>`;
+    ).innerHTML = `<span style="color:var(--warning)">⏳ Record in progress... Please wait ${sec}s</span>`;
 
     // Gọi lệnh xuống C++ (Dạng GET cho đơn giản)
     const path = await sendRequest(`/webcam?seconds=${sec}`);
@@ -281,9 +277,9 @@ async function sendCommand(cmd) {
 
         document.getElementById("recordResult").innerHTML = `
                     <div style="background:#1e293b; padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #475569;">
-                        <p style="color: #4ade80; margin-bottom: 10px;">✅ Quay thành công!</p>
+                        <p style="color: #4ade80; margin-bottom: 10px;">✅ Record successfully!</p>
                         <a href="${fullUrl}" download="${downloadName}" class="action-btn btn-primary" style="text-decoration: none; display: inline-block;">
-                            <i class="fa-solid fa-download"></i> Tải Video (.avi)
+                            <i class="fa-solid fa-download"></i> Download Video (.avi)
                         </a>
                     </div>`;
         showToast("Video is ready!", "success");
@@ -291,7 +287,7 @@ async function sendCommand(cmd) {
     } else {
       document.getElementById(
         "recordResult"
-      ).innerHTML = `<span style="color:var(--danger)">Lỗi khi quay video.</span>`;
+      ).innerHTML = `<span style="color:var(--danger)">Record Errors.</span>`;
     }
     return;
   }

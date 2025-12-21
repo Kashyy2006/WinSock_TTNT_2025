@@ -85,7 +85,7 @@ void webcam_stream_thread() {
     // Lưu ý: Nếu camera không hỗ trợ, OpenCV sẽ tự chọn độ phân giải gần nhất
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
-    cap.set(cv::CAP_PROP_FPS, 30);
+    cap.set(cv::CAP_PROP_FPS, 15);
 
     double actual_w = cap.get(cv::CAP_PROP_FRAME_WIDTH);
     double actual_h = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
@@ -143,27 +143,39 @@ bool get_latest_frame(std::vector<uchar>& buffer) {
 
 // Record video to AVI
 void record_webcam_thread_func(const std::string& filename, int duration_ms) {
-    cv::VideoCapture cap(0, cv::CAP_DSHOW);
-    if (!cap.isOpened()) return;
-
-    // 1080p
-    int width = 1920;
-    int height = 1080;
     int fps = 15;
+    is_recording = true;
 
-    cv::VideoWriter writer(filename, cv::VideoWriter::fourcc('M','J','P','G'), fps, cv::Size(width, height));
+    cv::Mat first;
+    while (first.empty()) {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        if (!latest_frame.empty())
+            first = latest_frame.clone();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    cv::VideoWriter writer(
+        filename,
+        cv::VideoWriter::fourcc('M','J','P','G'),
+        fps,
+        first.size()
+    );
     if (!writer.isOpened()) return;
 
     int total_frames = fps * duration_ms / 1000;
-    cv::Mat frame;
 
-    for (int i = 0; i < total_frames; ++i) {
-        cap >> frame;
-        if (frame.empty()) continue;
+    for (int i = 0; i < total_frames && is_recording; ++i) {
+        cv::Mat frame;
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);
+            if (latest_frame.empty()) continue;
+            frame = latest_frame.clone();
+        }
+
         writer.write(frame);
-        cv::waitKey(1000 / fps);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000 / fps));
     }
 
     writer.release();
-    cap.release();
+    is_recording = false;
 }

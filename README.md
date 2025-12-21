@@ -20,5 +20,6 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 .\server.exe
 
+- Chú ý là để chạy lệnh trên thì cần cài Studio 2022 và cài C++ Workload trên WS, cộng thêm extension CMake
 - Tiếp theo, ở máy client bật file index.html trong thư mục frontend, kết nối với IP của server và sử dụng các chức năng
   ( Chỉ dùng bên trong mạng Lan do việc mở PORT thực tế trên router khá nguy hiểm, nếu cần có thể dùng VPN để tạo mạng LAN ảo, ví dụ như Radmin VPN. )
